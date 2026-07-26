@@ -390,9 +390,10 @@ server/src/
 ├── app.ts                  ← Express factory (used by tests)
 ├── config/
 │   ├── env.ts              ← Zod-parsed env; throws at startup on missing vars
-│   ├── db.ts               ← postgres.js pool
 │   ├── redis.ts            ← ioredis client (shared between queue + pub/sub)
 │   └── queue.ts            ← BullMQ Queue + Worker instances
+├── db/
+│   └── db-connection.js    ← Prisma client singleton
 ├── middleware/
 │   ├── apiKey.ts           ← hash key → Postgres lookup → attach req.orgId
 │   ├── rateLimit.ts        ← per-org token bucket (Redis-backed)
@@ -476,18 +477,21 @@ The planner LLM receives the original query and returns a structured JSON plan:
 
 ```
 server/src/workers/
-├── search.worker.ts    ← BullMQ consumer: pulls search jobs, calls Serper
-├── extract.worker.ts   ← BullMQ consumer: pulls extract jobs, calls Playwright
-└── summary.worker.ts   ← BullMQ consumer: pulls summary jobs, calls LLM
+├── search.worker.js         ← BullMQ worker: calls Serper API
+├── scraper.worker.js        ← BullMQ worker: Playwright scrape
+├── openrouter.worker.js     ← BullMQ worker: OpenRouter LLM call
+├── subquery.worker.js       ← BullMQ worker: Task decomposition
+├── fact-extractor.worker.js ← BullMQ worker: Fact extraction
+└── synthesis.worker.js      ← BullMQ worker: Synthesize answers
 ```
 
 **Worker concurrency:**
 
 | Worker Type | Default Concurrency | Max |
 |---|---|---|
-| Search | 5 per instance | Scales with instances |
-| Extract | 3 per instance (CPU bound) | Scales with instances |
-| Summary | 5 per instance | Scales with instances |
+| Search / Scrape | 3-5 per instance (network bound) | Scales with instances |
+| LLM (OpenRouter / Synthesis) | 5 per instance | Scales with instances |
+| Subquery / Extract | 5 per instance | Scales with instances |
 
 **Retry policy per job:**
 
@@ -598,9 +602,9 @@ trace.getForTask(taskId, orgId)
 
 ## 7. Data Models
 
-### 7.1 Database Schema
+### 7.1 Database Schema (Prisma ORM)
 
-All tables live in a single PostgreSQL database with the `pgvector` extension enabled.
+All tables live in a single PostgreSQL database with the `pgvector` extension enabled, managed by Prisma ORM (`server/prisma/schema.prisma`). The SQL schema below reflects the underlying database structure.
 
 #### `organizations`
 ```sql

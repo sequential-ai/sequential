@@ -72,7 +72,7 @@ Sequential AI is a **parallel web-research API platform** purpose-built for AI a
 | **Task API** | Accepts a research query, fans it out across parallel Search + Extract workers, synthesizes an answer with citations |
 | **Monitor API** | Streams a real-time trace of every step inside a running (or completed) task over SSE |
 
-**Tech Stack:** PostgreSQL + pgvector · Express (Node.js) · React · Redis + BullMQ · TypeScript · pnpm Workspaces + Turborepo
+**Tech Stack:** Prisma ORM + PostgreSQL + pgvector · Express (Node.js) · React · Redis + BullMQ · TypeScript · pnpm Workspaces + Turborepo
 
 **Monetization:** Free at baseline. Usage-based pricing for persistent memory, higher worker concurrency, and extended trace retention.
 
@@ -210,10 +210,10 @@ Sequential AI is a parallel web-research API platform with the following scope:
 
 - **API Layer:** RESTful API with SSE streaming for real-time monitoring
 - **Orchestration Layer:** LLM-based query decomposition and fan-out to parallel workers
-- **Worker Layer:** Search workers (Serper), Extract workers (Playwright), Summary workers (LLM)
-- **Dashboard:** React-based web UI for no-code research, monitoring, and workspace management
-- **SDK:** TypeScript SDK (`@sequential-ai/sdk`) and Python SDK (`sequential-ai`)
-- **Infrastructure:** PostgreSQL + pgvector, Redis + BullMQ, Docker-based deployment
+- **Worker Layer:** Search (Serper), Scrape (Playwright), OpenRouter, SubQuery, FactExtractor, Synthesis
+- **API Gateway:** Express.js routing, Clerk middleware, API key validation, rate limiting
+- **Storage Layer:** PostgreSQL for relational data, pgvector for embeddings
+- **Infrastructure:** Prisma ORM, PostgreSQL + pgvector, Redis + BullMQ, Docker-based deployment
 
 ---
 

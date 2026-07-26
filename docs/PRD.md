@@ -115,10 +115,10 @@ There is a clear gap for a platform that treats **parallel research as a first-c
 
 | Layer | Technology | Rationale |
 |---|---|---|
-| Database | **PostgreSQL** + `pgvector` | Single source of truth for users, keys, billing, task metadata, and vector embeddings — avoids a separate vector DB |
+| Database | **Prisma ORM** + PostgreSQL + `pgvector` | Single source of truth for users, keys, billing, task metadata, and vector embeddings. Prisma manages schema and migrations. |
 | API Server | **Express on Node.js** | Non-blocking I/O is a natural fit for a workload that is almost entirely network-bound (search, scrape, LLM calls) |
 | Frontend | **React** | Powers both the marketing site and the dashboard |
-| Queue | **Redis + BullMQ** | Implements the fan-out: the orchestrator enqueues jobs; a worker pool pulls from the queue — this is what makes "up to 20 concurrent workers" a scheduling guarantee |
+| Queue | **Redis + BullMQ** | Implements the fan-out: the orchestrator enqueues jobs; a worker pool (Search, Scrape, OpenRouter, SubQuery, FactExtractor, Synthesis) pulls from the queue. |
 
 ### 5.2 External Services
 
@@ -140,11 +140,13 @@ Orchestrator (cheap/fast LLM)
   │  Decomposes query → sub-queries + tool assignments
   ▼
 Redis / BullMQ Queue  ──────────────────────────────────┐
-  │                                                      │
+                                                        │
+  ├─► SubQuery Worker → [Decomposed queries]             │
   ├─► Search Worker (Serper)  →  [URLs + excerpts]       │
-  ├─► Search Worker (Serper)  →  [URLs + excerpts]       │  N workers in parallel
-  ├─► Extract Worker (Playwright) →  [clean text]        │
-  └─► Extract Worker (Playwright) →  [clean text]        │
+  ├─► Scraper Worker (Playwright) →  [clean text]        │  N workers in parallel
+  ├─► FactExtractor Worker → [extracted facts]           │
+  ├─► OpenRouter Worker → [LLM processing]               │
+  └─► Synthesis Worker → [final answer]                  │
         │                                                 │
         ▼  Each result summarised by a cheap model        │
   Trace Store (Postgres) ◄──── every step written live   │

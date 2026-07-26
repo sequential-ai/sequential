@@ -259,7 +259,7 @@ export interface ClientConfig {
 
 ```typescript
 // src/http.ts
-import { SequentialError, RateLimitError, AuthError } from './errors';
+import { SequentialError, RateLimitError, AuthError, WorkerError } from './errors';
 
 interface HttpClientConfig {
   apiKey: string;
@@ -331,6 +331,7 @@ export class HttpClient {
   private throwHttpError(status: number, body: any): never {
     if (status === 401 || status === 403) throw new AuthError(body.error?.message);
     if (status === 429) throw new RateLimitError(body.error?.retryAfter);
+    if (body.error?.code === 'WORKER_ERROR') throw new WorkerError(body.error?.message, body.error?.retryable);
     throw new SequentialError(body.error?.code, body.error?.message, status);
   }
 
@@ -382,6 +383,13 @@ export class RateLimitError extends SequentialError {
     super('RATE_LIMIT', `Rate limited. Retry after ${retryAfter}s`, 429);
     this.name = 'RateLimitError';
     this.retryAfter = retryAfter;
+  }
+}
+
+export class WorkerError extends SequentialError {
+  constructor(message: string, retryable: boolean = true) {
+    super('WORKER_ERROR', message, 500, retryable);
+    this.name = 'WorkerError';
   }
 }
 ```

@@ -131,6 +131,8 @@ sequential/                          ← repo root
 │   ├── SDK_GUIDE.md
 │   ├── PROJECT_STRUCTURE.md         ← this file
 │   ├── ARCHITECTURE.md
+│   ├── DATABASE_DESIGN.md           ← Database schema and relationships
+│   ├── PRISMA_GUIDE.md              ← Prisma ORM usage guide
 │   ├── API_REFERENCE.md
 │   └── DASHBOARD.md
 │
@@ -190,9 +192,12 @@ server/
 │   │   └── synthesizer.ts           ← LLM call: all results → cited answer
 │   │
 │   ├── workers/
-│   │   ├── search.worker.ts         ← BullMQ worker: calls Serper API
-│   │   ├── extract.worker.ts        ← BullMQ worker: Playwright scrape
-│   │   └── summary.worker.ts        ← BullMQ worker: inline result summary
+│   │   ├── search.worker.js         ← BullMQ worker: calls Serper API
+│   │   ├── scraper.worker.js        ← BullMQ worker: Playwright scrape
+│   │   ├── openrouter.worker.js     ← BullMQ worker: OpenRouter LLM call
+│   │   ├── subquery.worker.js       ← BullMQ worker: Task decomposition
+│   │   ├── fact-extractor.worker.js ← BullMQ worker: Fact extraction
+│   │   └── synthesis.worker.js      ← BullMQ worker: Synthesize answers
 │   │
 │   ├── services/
 │   │   ├── serper.ts                ← Serper API client wrapper
@@ -206,16 +211,12 @@ server/
 │   │   └── stream.ts                ← Express SSE route handler + subscriber
 │   │
 │   └── db/
-│       ├── schema.sql               ← canonical schema (all tables + indexes)
-│       ├── migrations/              ← numbered .sql migration files
-│       │   ├── 001_init.sql
-│       │   ├── 002_pgvector.sql
-│       │   └── 003_interactions.sql
-│       └── queries/                 ← typed query functions (using postgres.js tagged SQL)
-│           ├── tasks.ts
-│           ├── keys.ts
-│           ├── usage.ts
-│           └── memory.ts
+│       └── db-connection.js         ← Prisma client singleton
+│
+├── prisma/                          ← Prisma ORM
+│   └── schema.prisma                ← Database schema and models
+│
+├── prisma.config.ts
 │
 ├── tests/
 │   ├── unit/
@@ -525,7 +526,10 @@ cp .env.example client/.env
 # 4. Run database migrations
 pnpm --filter server db:migrate
 
-# 5. Start everything in dev mode
+# 5. Generate Prisma client
+pnpm --filter server db:generate
+
+# 6. Start everything in dev mode
 pnpm dev
 ```
 
@@ -555,6 +559,19 @@ services:
     ports:
       - '6379:6379'
     command: redis-server --appendonly yes
+
+  prisma-studio:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./server:/app
+    command: npx prisma studio
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://user:password@postgres:5432/sequential
+    depends_on:
+      - postgres
 
 volumes:
   pg_data:
