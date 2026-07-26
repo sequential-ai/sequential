@@ -1,0 +1,206 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+enum SystemRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  PENDING
+  PLANNING
+  RUNNING
+  SYNTHESIZING
+  COMPLETED
+  FAILED
+}
+
+enum WorkerType {
+  PLANNER
+  SEARCH
+  EXTRACT
+  SYNTHESIZE
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model User {
+  id             String       @id @default(uuid())
+  clerkUserId    String       @unique
+  email          String       @unique
+  firstName      String?
+  lastName       String?
+  imageUrl       String?
+  systemRole     SystemRole   @default(USER)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  memberships    OrganizationMember[]
+  createdTasks   Task[]       @relation("TaskCreator")
+  createdApiKeys ApiKey[]     @relation("ApiKeyCreator")
+}
+
+model Organization {
+  id                   String        @id @default(uuid())
+  clerkOrgId           String        @unique
+  name                 String
+  
+  // Billing & Subscription
+  stripeCustomerId     String?       @unique
+  stripeSubscriptionId String?       @unique
+  subscriptionTier     SubscriptionTier @default(FREE)
+  tokenBalance         Int           @default(0)
+  isActive             Boolean       @default(true)
+  
+  metadata             Json?
+  
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  deletedAt            DateTime?
+
+  members              OrganizationMember[]
+  apiKeys              ApiKey[]
+  tasks                Task[]
+  memories             Memory[]
+  interactions         Interaction[]
+
+  @@index([clerkOrgId])
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  role           OrgRole      @default(MEMBER)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model ApiKey {
+  id               String       @id @default(uuid())
+  organizationId   String
+  createdByUserId  String?
+  name             String
+  keyHash          String       @unique
+  
+  lastUsedAt       DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  deletedAt        DateTime?
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser    User?        @relation("ApiKeyCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([keyHash])
+}
+
+model Task {
+  id               String       @id @default(uuid())
+  organizationId   String
+  createdByUserId  String?
+  query            String
+  status           TaskStatus   @default(PENDING)
+  resultAnswer     String?
+  
+  metadata         Json?
+  
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  completedAt      DateTime?
+  deletedAt        DateTime?
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser    User?        @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  
+  steps            TaskStep[]
+  memories         Memory[]
+  interactions     Interaction[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([createdByUserId])
+}
+
+model TaskStep {
+  id           String     @id @default(uuid())
+  taskId       String
+  workerType   WorkerType
+  status       TaskStatus
+  inputData    Json
+  outputData   Json?
+  errorMessage String?
+  errorDetails Json?      // For full stack traces or complex API errors
+  
+  startedAt    DateTime   @default(now())
+  completedAt  DateTime?
+
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([status])
+}
+
+model Memory {
+  id             String       @id @default(uuid())
+  organizationId String
+  taskId         String?
+  sourceUrl      String
+  content        String
+  embedding      Unsupported("vector(1536)")
+  
+  createdAt      DateTime     @default(now())
+  
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task           Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([taskId])
+}
+
+model Interaction {
+  id             String       @id @default(uuid())
+  organizationId String
+  taskId         String?
+  endpoint       String
+  tokensUsed     Int          @default(0)
+  cost           Float        @default(0)
+  
+  createdAt      DateTime     @default(now())
+  
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task           Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([taskId])
+  @@index([createdAt])
+}

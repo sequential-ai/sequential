@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev":"nodemon app.js",
+    "dev": "nodemon app.js",
     "test": "node --test src/workers/*.test.js",
+    "check:openrouter": "node src/workers/check-openrouter.js",
     "check:search": "node src/workers/check-search.js",
     "check:scrape": "node src/workers/check-scrape.js"
   },
@@ -14,8 +15,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@prisma/client": "^7.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "prisma": "^7.9.0"
   }
 }
