@@ -17,6 +17,8 @@ class SubQueryWorker {
       });
     }
 
+    const targetMax = input.maxSubQueries || this.maxSubQueries;
+
     const result = await this.llm.run({
       model: input.model || this.model,
       temperature: input.temperature ?? 0.2,
@@ -25,11 +27,11 @@ class SubQueryWorker {
       messages: [
         {
           role: "system",
-          content: "Decompose research questions into independent web-search sub-queries. Return JSON only with a subQueries array. Each item must have query and purpose strings.",
+          content: `You are a research planning agent. Decompose the user's research question into multiple independent, highly specific web-search sub-queries. You MUST generate exactly ${targetMax} sub-queries to ensure broad coverage. If the query is related to regulations, laws, or government policies, you MUST include 1 or 2 subqueries specifically targeting official government sources (e.g., appending 'site:.gov' or focusing on official regulatory bodies). Return JSON only with a 'subQueries' array. Each item must have 'query' and 'purpose' strings.`,
         },
         {
           role: "user",
-          content: JSON.stringify({ query: query.trim(), maxSubQueries: this.maxSubQueries }),
+          content: JSON.stringify({ query: query.trim(), maxSubQueries: targetMax }),
         },
       ],
     });
@@ -38,7 +40,7 @@ class SubQueryWorker {
     const subQueries = Array.isArray(output.subQueries)
       ? output.subQueries
           .filter((item) => typeof item?.query === "string" && item.query.trim())
-          .slice(0, this.maxSubQueries)
+          .slice(0, targetMax)
           .map((item, index) => ({
             id: item.id || `subquery_${index + 1}`,
             query: item.query.trim(),

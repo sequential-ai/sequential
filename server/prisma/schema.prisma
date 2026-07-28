@@ -54,6 +54,7 @@ enum TaskMode {
 enum WorkerType {
   PLANNER
   SEARCH
+  SCRAPE
   EXTRACT
   SYNTHESIZE
 }
@@ -496,6 +497,10 @@ model Task {
   status          TaskStatus @default(PENDING)
   mode            TaskMode   @default(STANDARD)
   resultAnswer    String?
+  input           Json?
+  execution       Json?
+  output          Json?
+  sources         Json?
   metadata        Json?
   costTotal       Decimal    @default(0) @db.Decimal(12, 6)
   tokensUsed      Int        @default(0)
@@ -531,8 +536,10 @@ model WorkerRun {
   provider     String // free-form: "openai", "anthropic", "firecrawl" ...
   model        String // free-form: "gpt-5", "claude-sonnet-5" ...
   status       TaskStatus
-  inputData    Json
-  outputData   Json?
+  objective    String?
+  input        Json       @map("inputData")
+  output       Json?      @map("outputData")
+
   errorMessage String?
   errorDetails Json?
   durationMs   Int?

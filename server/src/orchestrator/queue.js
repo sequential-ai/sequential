@@ -7,13 +7,15 @@ const connection = new IORedis(process.env.REDIS_URL || "redis://localhost:6379"
 
 const researchQueue = new Queue("researchQueue", { connection });
 
+const crypto = require("crypto");
+
 /**
  * Enqueues the initial PLAN job.
  */
-async function enqueuePlanJob(taskId, organizationId, query, mode = "STANDARD") {
+async function enqueuePlanJob(taskId, organizationId, query, mode = "STANDARD", taskSpec = null) {
   await researchQueue.add(
     "PLAN",
-    { taskId, organizationId, query, mode },
+    { taskId, organizationId, query, mode, taskSpec },
     { jobId: `plan-${taskId}` }
   );
 }
@@ -21,12 +23,12 @@ async function enqueuePlanJob(taskId, organizationId, query, mode = "STANDARD") 
 /**
  * Enqueues a SEARCH job for a specific subquery.
  */
-async function enqueueSearchJob(taskId, organizationId, subquery, mode) {
-  // Use a unique ID for each subquery to prevent duplicates
-  const jobId = `search-${taskId}-${Buffer.from(subquery).toString('base64').substring(0, 10)}`;
+async function enqueueSearchJob(taskId, organizationId, subquery, mode, taskSpec = null) {
+  const hash = crypto.createHash("md5").update(subquery).digest("hex");
+  const jobId = `search-${taskId}-${hash}`;
   await researchQueue.add(
     "SEARCH",
-    { taskId, organizationId, query: subquery, mode },
+    { taskId, organizationId, query: subquery, mode, taskSpec },
     { jobId }
   );
 }
@@ -34,11 +36,12 @@ async function enqueueSearchJob(taskId, organizationId, subquery, mode) {
 /**
  * Enqueues a SCRAPE job for a specific URL.
  */
-async function enqueueScrapeJob(taskId, organizationId, url, mode) {
-  const jobId = `scrape-${taskId}-${Buffer.from(url).toString('base64').substring(0, 10)}`;
+async function enqueueScrapeJob(taskId, organizationId, url, query, mode, taskSpec = null) {
+  const hash = crypto.createHash("md5").update(url).digest("hex");
+  const jobId = `scrape-${taskId}-${hash}`;
   await researchQueue.add(
     "SCRAPE",
-    { taskId, organizationId, url, mode },
+    { taskId, organizationId, url, query, mode, taskSpec },
     { jobId }
   );
 }
@@ -46,11 +49,12 @@ async function enqueueScrapeJob(taskId, organizationId, url, mode) {
 /**
  * Enqueues an EXTRACT job for scraped content.
  */
-async function enqueueExtractJob(taskId, organizationId, url, content, mode) {
-  const jobId = `extract-${taskId}-${Buffer.from(url).toString('base64').substring(0, 10)}`;
+async function enqueueExtractJob(taskId, organizationId, url, content, query, mode, taskSpec = null) {
+  const hash = crypto.createHash("md5").update(url).digest("hex");
+  const jobId = `extract-${taskId}-${hash}`;
   await researchQueue.add(
     "EXTRACT",
-    { taskId, organizationId, url, content, mode },
+    { taskId, organizationId, url, content, query, mode, taskSpec },
     { jobId }
   );
 }
@@ -58,10 +62,10 @@ async function enqueueExtractJob(taskId, organizationId, url, content, mode) {
 /**
  * Enqueues the final SYNTHESIZE job.
  */
-async function enqueueSynthesizeJob(taskId, organizationId, query) {
+async function enqueueSynthesizeJob(taskId, organizationId, query, taskSpec = null) {
   await researchQueue.add(
     "SYNTHESIZE",
-    { taskId, organizationId, query },
+    { taskId, organizationId, query, taskSpec },
     { jobId: `synthesize-${taskId}` }
   );
 }

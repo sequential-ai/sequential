@@ -57,9 +57,19 @@ class FactExtractorWorker {
 }
 
 function normalizeConfidence(value) {
+  if (typeof value === "string") {
+    const lower = value.toLowerCase().trim();
+    if (lower === "high" || lower === "medium" || lower === "low") {
+      return lower.toUpperCase();
+    }
+  }
   const number = Number(value);
-  if (!Number.isFinite(number)) return null;
-  return Math.max(0, Math.min(1, number));
+  if (Number.isFinite(number)) {
+    if (number >= 0.8) return "HIGH";
+    if (number >= 0.5) return "MEDIUM";
+    return "LOW";
+  }
+  return "MEDIUM"; // default
 }
 
 module.exports = { FactExtractorWorker };

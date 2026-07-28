@@ -1,0 +1,97 @@
+openapi: 3.0.0
+info:
+  title: Sequential AI Task API
+  version: 2.0.0
+  description: Enterprise-grade API for deep research and synthesis tasks.
+servers:
+  - url: http://localhost:3000/api
+paths:
+  /tasks:
+    post:
+      summary: Create a new research task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  description: The research query
+                mode:
+                  type: string
+                  enum: [FAST, STANDARD, DEEP]
+                  default: FAST
+                taskSpec:
+                  type: object
+                  description: JSON Schema Draft-07 to validate the extracted output.
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskV2'
+  /tasks/{id}:
+    get:
+      summary: Get task status and results
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskV2'
+components:
+  schemas:
+    TaskV2:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, PLANNING, RUNNING, SYNTHESIZING, COMPLETED, FAILED]
+        input:
+          type: object
+          properties:
+            query:
+              type: string
+            mode:
+              type: string
+            taskSpec:
+              type: object
+        execution:
+          type: object
+          properties:
+            workerRuns:
+              type: array
+            metrics:
+              type: object
+        output:
+          type: object
+          properties:
+            answer:
+              type: string
+            data:
+              type: object
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              url:
+                type: string
+              domain:
+                type: string

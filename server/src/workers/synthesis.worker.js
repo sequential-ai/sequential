@@ -1,5 +1,7 @@
 const { WorkerError } = require("./errors");
 const { OpenRouterWorker, parseJsonContent } = require("./openrouter.worker");
+const TaskValidator = require("../modules/tasks/taskValidator");
+const { SYNTHESIS_SYSTEM_PROMPT } = require("./prompts");
 
 class SynthesisWorker {
   constructor(options = {}) {
@@ -15,6 +17,12 @@ class SynthesisWorker {
       });
     }
 
+    let systemPrompt = SYNTHESIS_SYSTEM_PROMPT;
+    
+    if (input.taskSpec) {
+      systemPrompt = `${SYNTHESIS_SYSTEM_PROMPT}\n\nReturn JSON matching this exact JSON Schema:\n${JSON.stringify(input.taskSpec)}`;
+    }
+
     const result = await this.llm.run({
       model: input.model || this.model,
       temperature: input.temperature ?? 0.1,
@@ -23,7 +31,7 @@ class SynthesisWorker {
       messages: [
         {
           role: "system",
-          content: "Synthesize a concise answer using only the supplied facts. Return JSON only with answer (MUST be a single string containing markdown text, NOT an object or array), citations (array of strings), uncertainty (string), and nextActions (array of strings). Cite claims with source indexes such as [1]. Never invent unsupported details.",
+          content: systemPrompt,
         },
         {
           role: "user",
@@ -31,22 +39,51 @@ class SynthesisWorker {
             query: input.query.trim(),
             facts: input.facts || [],
             sources: input.sources || [],
+            previousValidationErrors: input.validationErrors || undefined,
           }),
         },
       ],
     });
 
     const output = parseJsonContent(result.content, "INVALID_SYNTHESIS_OUTPUT");
-    
-    // Fallback: If AI generates an object for answer, stringify it instead of failing
-    let finalAnswer = output.answer;
-    if (typeof finalAnswer === "object" && finalAnswer !== null) {
-      finalAnswer = JSON.stringify(finalAnswer, null, 2);
-    } else if (finalAnswer) {
-      finalAnswer = String(finalAnswer);
+
+    let actualData = output;
+    if (output && output.output && output.output.data) {
+      actualData = output.output.data;
+    } else if (output && output.data) {
+      actualData = output.data;
     }
 
-    if (typeof finalAnswer !== "string" || !finalAnswer.trim()) {
+    if (input.taskSpec) {
+      const validationResult = TaskValidator.validate(input.taskSpec, actualData);
+      if (!validationResult.valid) {
+        if (input.retryCount !== 1) {
+          console.warn("Synthesis validation failed, retrying...", validationResult.errors);
+          return this.run({ ...input, validationErrors: validationResult.errors, retryCount: 1 });
+        } else {
+          throw new WorkerError(`Synthesis output failed schema validation: ${JSON.stringify(validationResult.errors)}`, {
+            code: "SYNTHESIS_SCHEMA_MISMATCH",
+            status: 502,
+          });
+        }
+      }
+      return {
+        ...result,
+        data: actualData
+      };
+    }
+    
+    // For queries without taskSpec, we still want to return the structured object if one was generated
+    if (typeof actualData === "object" && actualData !== null) {
+      return {
+        ...result,
+        data: actualData
+      };
+    }
+
+    // Fallback if LLM unexpectedly returned a plain string
+    let finalAnswer = String(actualData);
+    if (!finalAnswer.trim()) {
       throw new WorkerError(`OpenRouter returned no synthesis answer. Raw output: ${result.content}`, {
         code: "INVALID_SYNTHESIS_OUTPUT",
         status: 502,
@@ -55,10 +92,7 @@ class SynthesisWorker {
 
     return {
       ...result,
-      answer: finalAnswer.trim(),
-      citations: Array.isArray(output.citations) ? output.citations : [],
-      uncertainty: Array.isArray(output.uncertainty) ? output.uncertainty : [],
-      nextActions: Array.isArray(output.nextActions) ? output.nextActions : [],
+      answer: finalAnswer.trim()
     };
   }
 }

@@ -3,7 +3,7 @@ const { enqueuePlanJob } = require("../orchestrator/queue");
 
 const createTask = async (req, res) => {
   try {
-    const { query, mode = "FAST" } = req.body;
+    const { query, mode = "FAST", taskSpec } = req.body;
     const organizationId = req.organizationId;
     
     if (!query) {
@@ -21,15 +21,23 @@ const createTask = async (req, res) => {
         query,
         status: "PENDING",
         mode: mode.toUpperCase(),
+        input: { query, mode: mode.toUpperCase(), taskSpec: taskSpec || null },
       },
     });
 
     // Kick off the research pipeline
-    await enqueuePlanJob(task.id, organizationId, query, mode.toUpperCase());
+    await enqueuePlanJob(task.id, organizationId, query, mode.toUpperCase(), taskSpec);
 
     res.status(201).json({
       message: "Task created and pipeline started",
-      task,
+      task: {
+        id: task.id,
+        status: task.status,
+        input: task.input,
+        execution: task.execution,
+        output: task.output,
+        sources: task.sources
+      },
     });
   } catch (err) {
     console.error("Error creating task:", err);
@@ -52,7 +60,15 @@ const getTaskStatus = async (req, res) => {
       return res.status(404).json({ error: "Task not found" });
     }
 
-    res.json(task);
+    // Return the V2 format, but include workerRuns inside execution
+    res.json({
+      id: task.id,
+      status: task.status,
+      input: task.input || { query: task.query, mode: task.mode },
+      execution: task.execution || { workerRuns: task.workerRuns, costTotal: task.costTotal, tokensUsed: task.tokensUsed, executionTimeMs: task.executionTimeMs },
+      output: task.output || { answer: task.resultAnswer },
+      sources: task.sources || [],
+    });
   } catch (err) {
     console.error("Error fetching task:", err);
     res.status(500).json({ error: "Internal server error" });
