@@ -23,7 +23,7 @@ class SynthesisWorker {
       messages: [
         {
           role: "system",
-          content: "Synthesize a concise answer using only the supplied facts. Return JSON only with answer, citations, uncertainty, and nextActions. Cite claims with source indexes such as [1]. Never invent unsupported details.",
+          content: "Synthesize a concise answer using only the supplied facts. Return JSON only with answer (MUST be a single string containing markdown text, NOT an object or array), citations (array of strings), uncertainty (string), and nextActions (array of strings). Cite claims with source indexes such as [1]. Never invent unsupported details.",
         },
         {
           role: "user",
@@ -37,8 +37,17 @@ class SynthesisWorker {
     });
 
     const output = parseJsonContent(result.content, "INVALID_SYNTHESIS_OUTPUT");
-    if (typeof output.answer !== "string" || !output.answer.trim()) {
-      throw new WorkerError("OpenRouter returned no synthesis answer", {
+    
+    // Fallback: If AI generates an object for answer, stringify it instead of failing
+    let finalAnswer = output.answer;
+    if (typeof finalAnswer === "object" && finalAnswer !== null) {
+      finalAnswer = JSON.stringify(finalAnswer, null, 2);
+    } else if (finalAnswer) {
+      finalAnswer = String(finalAnswer);
+    }
+
+    if (typeof finalAnswer !== "string" || !finalAnswer.trim()) {
+      throw new WorkerError(`OpenRouter returned no synthesis answer. Raw output: ${result.content}`, {
         code: "INVALID_SYNTHESIS_OUTPUT",
         status: 502,
       });
@@ -46,7 +55,7 @@ class SynthesisWorker {
 
     return {
       ...result,
-      answer: output.answer.trim(),
+      answer: finalAnswer.trim(),
       citations: Array.isArray(output.citations) ? output.citations : [],
       uncertainty: Array.isArray(output.uncertainty) ? output.uncertainty : [],
       nextActions: Array.isArray(output.nextActions) ? output.nextActions : [],

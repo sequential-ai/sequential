@@ -45,6 +45,12 @@ enum TaskStatus {
   CANCELED
 }
 
+enum TaskMode {
+  FAST
+  STANDARD
+  DEEP
+}
+
 enum WorkerType {
   PLANNER
   SEARCH
@@ -488,6 +494,7 @@ model Task {
   createdByUserId String?
   query           String
   status          TaskStatus @default(PENDING)
+  mode            TaskMode   @default(STANDARD)
   resultAnswer    String?
   metadata        Json?
   costTotal       Decimal    @default(0) @db.Decimal(12, 6)

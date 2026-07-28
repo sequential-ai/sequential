@@ -37,9 +37,14 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "clerkUserId and email are required" });
         }
 
-        // Check if user already exists
-        const existingUser = await prisma.user.findUnique({
-            where: { clerkUserId }
+        // Check if user already exists by clerkUserId or email
+        const existingUser = await prisma.user.findFirst({
+            where: { 
+                OR: [
+                    { clerkUserId },
+                    { email }
+                ]
+            }
         });
 
         if (existingUser) {
@@ -120,24 +125,7 @@ const registerUser = async (req, res) => {
                 }
             });
 
-            // 5. Generate API Key for the Organization
-            const rawKey = crypto.randomBytes(32).toString('hex');
-            const keyPrefix = `sk_live_${rawKey.substring(0, 8)}`;
-            const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
-
-            await tx.apiKey.create({
-                data: {
-                    organizationId: newOrg.id,
-                    createdByUserId: newUser.id,
-                    name: 'Default API Key',
-                    keyPrefix,
-                    keyHash,
-                    environment: 'LIVE',
-                    scopes: ['*']
-                }
-            });
-
-            return { newUser, rawApiKey: rawKey };
+            return { newUser };
         });
 
         const fullyPopulatedUser = await prisma.user.findUnique({
@@ -151,10 +139,13 @@ const registerUser = async (req, res) => {
             success: true,
             message: "User registered and workspace provisioned successfully",
             token,
-            data: fullyPopulatedUser,
-            apiKey: result.rawApiKey // Only returned once!
+            data: fullyPopulatedUser
         });
     } catch (error) {
+        if (error.code === 'P2002') {
+            console.warn(`[Warning] Duplicate registration attempt for ${req.body.email}. Ignoring.`);
+            return res.status(400).json({ success: false, message: "User already exists (duplicate request)" });
+        }
         console.error("Register Error: ", error);
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
