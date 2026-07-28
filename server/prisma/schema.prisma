@@ -1,6 +1,6 @@
+
 generator client {
   provider        = "prisma-client-js"
-  output          = "../src/generated/prisma"
   previewFeatures = ["postgresqlExtensions"]
 }
 
@@ -8,6 +8,10 @@ datasource db {
   provider   = "postgresql"
   extensions = [vector]
 }
+
+// =========================================================================
+// ENUMS
+// =========================================================================
 
 enum SystemRole {
   USER
@@ -18,7 +22,17 @@ enum SystemRole {
 enum OrgRole {
   OWNER
   ADMIN
-  MEMBER
+  DEVELOPER
+  ANALYST
+  BILLING
+  VIEWER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
 }
 
 enum TaskStatus {
@@ -28,6 +42,7 @@ enum TaskStatus {
   SYNTHESIZING
   COMPLETED
   FAILED
+  CANCELED
 }
 
 enum WorkerType {
@@ -37,170 +52,670 @@ enum WorkerType {
   SYNTHESIZE
 }
 
-enum SubscriptionTier {
-  FREE
-  PRO
-  ENTERPRISE
+enum SubscriptionProvider {
+ Razorpay
+ PayU
 }
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  UNPAID
+  PAUSED
+}
+
+enum CreditEntryType {
+  GRANT
+  PURCHASE
+  SPEND
+  REFUND
+  ADJUSTMENT
+}
+
+enum UsagePeriod {
+  DAILY
+  MONTHLY
+}
+
+enum ApiKeyEnvironment {
+  LIVE
+  TEST
+}
+
+enum NotificationType {
+  TASK_COMPLETED
+  TASK_FAILED
+  CREDITS_LOW
+  SUBSCRIPTION_RENEWED
+  SUBSCRIPTION_CANCELED
+  INVITE_ACCEPTED
+  MEMBER_JOINED
+  GENERAL
+}
+
+enum AuditCategory {
+  AUTH
+  ORGANIZATION
+  MEMBER
+  BILLING
+  API_KEY
+  PROJECT
+  TASK
+  SETTINGS
+  SECURITY
+}
+
+enum SecretProvider {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  FIRECRAWL
+  BRIGHTDATA
+  SERPAPI
+  OTHER
+}
+
+enum WebhookEventType {
+  TASK_COMPLETED
+  TASK_FAILED
+  SUBSCRIPTION_UPDATED
+  CREDITS_LOW
+  MEMBER_INVITED
+  API_KEY_CREATED
+}
+
+// =========================================================================
+// IDENTITY
+// =========================================================================
 
 model User {
-  id             String       @id @default(uuid())
-  clerkUserId    String       @unique
-  email          String       @unique
-  firstName      String?
-  lastName       String?
-  imageUrl       String?
-  systemRole     SystemRole   @default(USER)
-  
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  deletedAt      DateTime?
+  id          String     @id @default(cuid())
+  clerkUserId String     @unique
+  email       String     @unique
+  firstName   String?
+  lastName    String?
+  imageUrl    String?
+  systemRole  SystemRole @default(USER)
 
-  memberships    OrganizationMember[]
-  createdTasks   Task[]       @relation("TaskCreator")
-  createdApiKeys ApiKey[]     @relation("ApiKeyCreator")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  memberships       OrganizationMember[]
+  sentInvites       OrganizationInvite[]  @relation("InviteSender")
+  createdProjects   Project[]             @relation("ProjectCreator")
+  createdTasks      Task[]                @relation("TaskCreator")
+  createdApiKeys    ApiKey[]              @relation("ApiKeyCreator")
+  savedSearches     SavedSearch[]         @relation("SavedSearchCreator")
+  notifications     Notification[]
+  auditLogEntries   AuditLog[]            @relation("AuditActor")
+
+  @@index([email])
 }
 
-model Organization {
-  id                   String        @id @default(uuid())
-  clerkOrgId           String        @unique
-  name                 String
-  
-  // Billing & Subscription
-  stripeCustomerId     String?       @unique
-  stripeSubscriptionId String?       @unique
-  subscriptionTier     SubscriptionTier @default(FREE)
-  tokenBalance         Int           @default(0)
-  isActive             Boolean       @default(true)
-  
-  metadata             Json?
-  
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-  deletedAt            DateTime?
+// =========================================================================
+// ORGANIZATION (workspace only — no billing/task/key fields)
+// =========================================================================
 
-  members              OrganizationMember[]
-  apiKeys              ApiKey[]
-  tasks                Task[]
-  memories             Memory[]
-  interactions         Interaction[]
+model Organization {
+  id         String   @id @default(cuid())
+  clerkOrgId String   @unique
+  name       String
+  slug       String   @unique
+  logoUrl    String?
+  metadata   Json?
+  isActive   Boolean  @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  members        OrganizationMember[]
+  invites        OrganizationInvite[]
+  settings       OrganizationSettings?
+  billingAccount BillingAccount?
+  subscription   Subscription?
+  creditLedger   CreditLedgerEntry[]
+  usageRecords   UsageRecord[]
+  apiKeys        ApiKey[]
+  requestLogs    ApiRequestLog[]
+  secrets        Secret[]
+  webhooks       Webhook[]
+  projects       Project[]
+  tasks          Task[]
+  memories       Memory[]
+  collections    Collection[]
+  savedSearches  SavedSearch[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
 
   @@index([clerkOrgId])
+  @@index([slug])
 }
 
 model OrganizationMember {
-  id             String       @id @default(uuid())
+  id             String  @id @default(cuid())
   organizationId String
   userId         String
-  role           OrgRole      @default(MEMBER)
-  
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  role           OrgRole @default(VIEWER)
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
   @@index([userId])
-  @@index([organizationId])
+  @@index([organizationId, role])
 }
 
-model ApiKey {
-  id               String       @id @default(uuid())
-  organizationId   String
-  createdByUserId  String?
-  name             String
-  keyHash          String       @unique
-  
-  lastUsedAt       DateTime?
-  revokedAt        DateTime?
-  createdAt        DateTime     @default(now())
-  deletedAt        DateTime?
+model OrganizationInvite {
+  id              String       @id @default(cuid())
+  organizationId  String
+  email           String
+  role            OrgRole      @default(VIEWER)
+  token           String       @unique
+  status          InviteStatus @default(PENDING)
+  invitedByUserId String?
+  expiresAt       DateTime
+  acceptedAt      DateTime?
 
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdByUser    User?        @relation("ApiKeyCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedByUser User?        @relation("InviteSender", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, email])
+  @@index([organizationId, status])
+  @@index([token])
+}
+
+model OrganizationSettings {
+  id             String  @id @default(cuid())
+  organizationId String  @unique
+  timezone       String  @default("UTC")
+  defaultAiModel String?
+  theme          String  @default("system")
+  allowedDomains String[]
+  ssoEnabled     Boolean @default(false)
+  mfaRequired    Boolean @default(false)
+  webhookSecret  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =========================================================================
+// BILLING & SUBSCRIPTION
+// =========================================================================
+
+model Plan {
+  id           String  @id @default(cuid())
+  key          String  @unique // "free" | "pro" | "business" | "enterprise"
+  name         String
+  description  String?
+  monthlyPrice Decimal @db.Decimal(10, 2)
+  yearlyPrice  Decimal @db.Decimal(10, 2)
+  isPublic     Boolean @default(true) // false = bespoke enterprise pricing
+
+  maxMembers          Int
+  maxApiKeys          Int
+  maxProjects         Int
+  storageLimitGb      Int
+  monthlyCredits      Int
+  monthlyRequestLimit Int
+  rateLimitPerMinute  Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+  planFeatures  PlanFeature[]
+
+  @@index([key])
+}
+
+model Feature {
+  id          String  @id @default(cuid())
+  key         String  @unique // "deep_research" | "memory" | "projects" | "exports" | "api_access" | "unlimited_history"
+  name        String
+  description String?
+
+  planFeatures PlanFeature[]
+}
+
+model PlanFeature {
+  id        String  @id @default(cuid())
+  planId    String
+  featureId String
+  enabled   Boolean @default(true)
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureId])
+  @@index([featureId])
+}
+
+model Subscription {
+  id                     String               @id @default(cuid())
+  organizationId         String               @unique
+  planId                 String
+  provider               SubscriptionProvider
+  providerCustomerId     String?
+  providerSubscriptionId String?              @unique
+  status                 SubscriptionStatus   @default(TRIALING)
+  trialEndsAt            DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean              @default(false)
+  canceledAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+  @@index([status])
+}
+
+model BillingAccount {
+  id             String  @id @default(cuid())
+  organizationId String  @unique
+  billingEmail   String
+  companyName    String?
+  taxId          String?
+  vatNumber      String?
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  state          String?
+  postalCode     String?
+  country        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =========================================================================
+// CREDITS (append-only ledger — never a mutable balance column)
+// =========================================================================
+
+model CreditLedgerEntry {
+  id             String          @id @default(cuid())
+  organizationId String
+  taskId         String?
+  amount         Int // positive = credit, negative = debit
+  balanceAfter   Int // denormalized snapshot, written in same tx as amount
+  type           CreditEntryType
+  reason         String
+  metadata       Json?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([taskId])
+}
+
+// =========================================================================
+// USAGE (aggregated rollups vs raw per-request log)
+// =========================================================================
+
+model UsageRecord {
+  id             String      @id @default(cuid())
+  organizationId String
+  period         UsagePeriod
+  periodStart    DateTime
+
+  requests      Int     @default(0)
+  searches      Int     @default(0)
+  extractions   Int     @default(0)
+  syntheses     Int     @default(0)
+  inputTokens   BigInt  @default(0)
+  outputTokens  BigInt  @default(0)
+  aiCost        Decimal @default(0) @db.Decimal(12, 6)
+  creditsUsed   Int     @default(0)
+  storageUsedMb Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, period, periodStart])
+  @@index([organizationId, period])
+}
+
+model ApiRequestLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  apiKeyId       String?
+  taskId         String?
+  endpoint       String
+  method         String
+  statusCode     Int
+  tokensUsed     Int      @default(0)
+  cost           Decimal  @default(0) @db.Decimal(12, 6)
+  latencyMs      Int?
+  ipAddress      String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  apiKey       ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([apiKeyId])
+  @@index([taskId])
+}
+
+// =========================================================================
+// API KEYS
+// =========================================================================
+
+model ApiKey {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  createdByUserId    String?
+  name               String
+  description        String?
+  keyPrefix          String // visible portion, e.g. sk_live_4f9a
+  keyHash            String            @unique // never the raw secret
+  environment        ApiKeyEnvironment @default(LIVE)
+  scopes             String[]
+  rateLimitPerMinute Int?
+  lastUsedAt         DateTime?
+  lastUsedIp         String?
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser User?           @relation("ApiKeyCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  requestLogs   ApiRequestLog[]
 
   @@index([organizationId])
-  @@index([keyHash])
+  @@index([keyPrefix])
+}
+
+// =========================================================================
+// PROJECTS -> TASKS -> WORKER RUNS
+// =========================================================================
+
+model Project {
+  id              String  @id @default(cuid())
+  organizationId  String
+  createdByUserId String?
+  name            String
+  description     String?
+  archived        Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser User?        @relation("ProjectCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  tasks         Task[]
+  memories      Memory[]
+
+  @@index([organizationId])
+  @@index([organizationId, archived])
 }
 
 model Task {
-  id               String       @id @default(uuid())
-  organizationId   String
-  createdByUserId  String?
-  query            String
-  status           TaskStatus   @default(PENDING)
-  resultAnswer     String?
-  
-  metadata         Json?
-  
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  completedAt      DateTime?
-  deletedAt        DateTime?
+  id              String     @id @default(cuid())
+  organizationId  String
+  projectId       String?
+  createdByUserId String?
+  query           String
+  status          TaskStatus @default(PENDING)
+  resultAnswer    String?
+  metadata        Json?
+  costTotal       Decimal    @default(0) @db.Decimal(12, 6)
+  tokensUsed      Int        @default(0)
+  executionTimeMs Int?
 
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdByUser    User?        @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  
-  steps            TaskStep[]
-  memories         Memory[]
-  interactions     Interaction[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+  canceledAt  DateTime?
+  deletedAt   DateTime?
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project       Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdByUser User?        @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  workerRuns        WorkerRun[]
+  memories          Memory[]
+  creditLedger      CreditLedgerEntry[]
+  requestLogs       ApiRequestLog[]
+  collectionTasks   CollectionTask[]
+  savedSearchOrigin SavedSearch[]       @relation("SavedSearchOriginTask")
 
   @@index([organizationId])
   @@index([organizationId, status])
+  @@index([projectId])
   @@index([createdByUserId])
 }
 
-model TaskStep {
-  id           String     @id @default(uuid())
+model WorkerRun {
+  id           String     @id @default(cuid())
   taskId       String
   workerType   WorkerType
+  provider     String // free-form: "openai", "anthropic", "firecrawl" ...
+  model        String // free-form: "gpt-5", "claude-sonnet-5" ...
   status       TaskStatus
   inputData    Json
   outputData   Json?
   errorMessage String?
-  errorDetails Json?      // For full stack traces or complex API errors
-  
-  startedAt    DateTime   @default(now())
-  completedAt  DateTime?
+  errorDetails Json?
+  durationMs   Int?
+  cost         Decimal    @default(0) @db.Decimal(12, 6)
+  tokensUsed   Int        @default(0)
+  retryCount   Int        @default(0)
+  logs         Json?
 
-  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
   @@index([status])
 }
 
+// =========================================================================
+// MEMORY, COLLECTIONS, SAVED SEARCHES
+// =========================================================================
+
 model Memory {
-  id             String       @id @default(uuid())
+  id             String @id @default(cuid())
   organizationId String
   taskId         String?
+  projectId      String?
   sourceUrl      String
   content        String
   embedding      Unsupported("vector(1536)")
-  
-  createdAt      DateTime     @default(now())
-  
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  task           Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+  @@index([taskId])
+  @@index([projectId])
+  // Also run, via raw SQL migration (Prisma can't express pgvector index types):
+  // CREATE INDEX ON "Memory" USING hnsw (embedding vector_cosine_ops);
+}
+
+model Collection {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tasks        CollectionTask[]
+
+  @@index([organizationId])
+}
+
+model CollectionTask {
+  id           String @id @default(cuid())
+  collectionId String
+  taskId       String
+
+  createdAt DateTime @default(now())
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, taskId])
   @@index([taskId])
 }
 
-model Interaction {
-  id             String       @id @default(uuid())
-  organizationId String
-  taskId         String?
-  endpoint       String
-  tokensUsed     Int          @default(0)
-  cost           Float        @default(0)
-  
-  createdAt      DateTime     @default(now())
-  
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  task           Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+model SavedSearch {
+  id              String  @id @default(cuid())
+  organizationId  String
+  createdByUserId String?
+  name            String
+  query           String
+  filters         Json?
+  originTaskId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser User?        @relation("SavedSearchCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  originTask    Task?        @relation("SavedSearchOriginTask", fields: [originTaskId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
-  @@index([taskId])
-  @@index([createdAt])
+}
+
+// =========================================================================
+// NOTIFICATIONS & AUDIT
+// =========================================================================
+
+model Notification {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String? // null = org-wide broadcast
+  type           NotificationType
+  title          String
+  body           String?
+  metadata       Json?
+  readAt         DateTime?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String
+  actorUserId    String?
+  category       AuditCategory
+  action         String // free-text, e.g. "api_key.created"
+  metadata       Json?
+  ipAddress      String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser    User?        @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([category])
+  @@index([actorUserId])
+}
+
+// =========================================================================
+// SECRETS & WEBHOOKS
+// =========================================================================
+
+model Secret {
+  id             String         @id @default(cuid())
+  organizationId String
+  provider       SecretProvider
+  name           String
+  encryptedValue String // ciphertext only; app layer handles KMS/envelope encryption
+  keyVersion     Int            @default(1)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider, name])
+  @@index([organizationId])
+}
+
+model Webhook {
+  id             String             @id @default(cuid())
+  organizationId String
+  url            String
+  secret         String
+  events         WebhookEventType[]
+  isActive       Boolean            @default(true)
+  maxRetries     Int                @default(5)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id           String           @id @default(cuid())
+  webhookId    String
+  event        WebhookEventType
+  payload      Json
+  attempt      Int              @default(1)
+  statusCode   Int?
+  success      Boolean          @default(false)
+  responseBody String?
+
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([event])
 }

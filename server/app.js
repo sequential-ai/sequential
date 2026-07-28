@@ -6,8 +6,14 @@ dotenv.config();
 
 const app = express();
 
-app.use(express.json())
-app.use(cors())
+const authRoutes = require("./src/routes/v1/auth.routes");
+
+app.use(express.json());
+app.use(cors());
+
+// Mount Routes
+app.use("/api/v1/auth", authRoutes);
+
 app.get("/", (req, res) => {
     res.json({
         message: "success",
@@ -17,8 +23,8 @@ app.get("/", (req, res) => {
             author: "Your Name",
             year: new Date().getFullYear(),
         },
-    })
-})
+    });
+});
 
 app.listen(process.env.PORT, () => {
     console.log(`Server is running on port ${process.env.PORT}`)
