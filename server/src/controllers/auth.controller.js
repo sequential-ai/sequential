@@ -9,6 +9,22 @@ const generateToken = (id) => {
     });
 };
 
+const userInclude = {
+    memberships: {
+        include: {
+            organization: {
+                include: {
+                    subscription: {
+                        include: { plan: true }
+                    },
+                    apiKeys: true,
+                    creditLedger: true
+                }
+            }
+        }
+    }
+};
+
 /**
  * @desc    Register a new user (Sync from Clerk to our DB)
  * @route   POST /api/v1/auth/register
@@ -124,13 +140,18 @@ const registerUser = async (req, res) => {
             return { newUser, rawApiKey: rawKey };
         });
 
-        const token = generateToken(result.newUser.clerkUserId);
+        const fullyPopulatedUser = await prisma.user.findUnique({
+            where: { id: result.newUser.id },
+            include: userInclude
+        });
+
+        const token = generateToken(fullyPopulatedUser.clerkUserId);
 
         res.status(201).json({
             success: true,
             message: "User registered and workspace provisioned successfully",
             token,
-            data: result.newUser,
+            data: fullyPopulatedUser,
             apiKey: result.rawApiKey // Only returned once!
         });
     } catch (error) {
@@ -153,7 +174,8 @@ const loginUser = async (req, res) => {
 
         // Find user by clerkUserId
         const user = await prisma.user.findUnique({
-            where: { clerkUserId }
+            where: { clerkUserId },
+            include: userInclude
         });
 
         if (!user) {
@@ -206,7 +228,8 @@ const getProfile = async (req, res) => {
         }
 
         const user = await prisma.user.findUnique({
-            where: { clerkUserId }
+            where: { clerkUserId },
+            include: userInclude
         });
 
         if (!user) {
