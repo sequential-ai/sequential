@@ -13,6 +13,12 @@ export interface HttpClientOptions {
   maxRetries: number;
 }
 
+export interface ServerSentEvent {
+  event: string | null;
+  data: string;
+  id: string | null;
+}
+
 export class HttpClient {
   private baseURL: string;
   private apiKey: string;
@@ -109,6 +115,107 @@ export class HttpClient {
 
   public async get<T>(path: string, options?: { headers?: Record<string, string> }): Promise<T> {
     return this.request<T>("GET", path, options);
+  }
+
+  public async *stream(path: string, options?: { headers?: Record<string, string> }): AsyncIterableIterator<ServerSentEvent> {
+    const url = `${this.baseURL}${path.startsWith("/") ? path : `/${path}`}`;
+    let attempt = 0;
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      Accept: "text/event-stream",
+      ...options?.headers,
+    };
+
+    while (attempt <= this.maxRetries) {
+      try {
+        const response = await fetch(url, { method: "GET", headers });
+        if (!response.ok) {
+           if ([429, 500, 502, 503, 504].includes(response.status) && attempt < this.maxRetries) {
+              attempt++;
+              const delay = calculateExponentialBackoff(attempt);
+              await sleep(delay);
+              continue;
+           }
+           await this.handleError(response);
+        }
+
+        if (!response.body) {
+           throw new SequentialAIError("Response body is empty");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          
+          buffer = lines.pop() || ""; // Keep the last incomplete line in buffer
+
+          let event: string | null = null;
+          let data = "";
+          let id: string | null = null;
+
+          for (const line of lines) {
+            if (line.trim() === "") {
+              if (data) {
+                yield { event, data: data.trim(), id };
+              }
+              event = null;
+              data = "";
+              id = null;
+            } else if (line.startsWith("event: ")) {
+              event = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+              data += line.slice(6) + "\n";
+            } else if (line.startsWith("id: ")) {
+              id = line.slice(4);
+            } else if (line.startsWith(":")) {
+              // Comment, ignore
+            }
+          }
+        }
+        
+        if (buffer.trim() !== "") {
+            // Process any remaining buffer content
+            const lines = buffer.split(/\r?\n/);
+            let event: string | null = null;
+            let data = "";
+            let id: string | null = null;
+            for (const line of lines) {
+              if (line.trim() === "") {
+                if (data) yield { event, data: data.trim(), id };
+                event = null;
+                data = "";
+                id = null;
+              } else if (line.startsWith("event: ")) {
+                event = line.slice(7);
+              } else if (line.startsWith("data: ")) {
+                data += line.slice(6) + "\n";
+              } else if (line.startsWith("id: ")) {
+                id = line.slice(4);
+              }
+            }
+            if (data) yield { event, data: data.trim(), id };
+        }
+        
+        return; // Successfully completed stream
+      } catch (error: any) {
+        if (attempt < this.maxRetries) {
+          attempt++;
+          const delay = calculateExponentialBackoff(attempt);
+          await sleep(delay);
+          continue;
+        }
+        throw new SequentialAIError(`Network error while streaming: ${error.message}`);
+      }
+    }
+    throw new SequentialAIError("Max retries exceeded while trying to stream");
   }
 
   public async post<T>(path: string, body?: any, options?: { headers?: Record<string, string> }): Promise<T> {

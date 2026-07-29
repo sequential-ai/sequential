@@ -45,6 +45,23 @@ export class Tasks {
   }
 
   /**
+   * Streams task events for real-time updates.
+   * @param id The ID of the task to stream events for.
+   * @returns An async iterable iterator of task events.
+   */
+  public async *stream(id: string) {
+    for await (const sse of this.client.http.stream(`/tasks/${id}/stream`)) {
+      if (sse.event !== 'heartbeat') {
+        yield {
+          type: sse.event || 'message',
+          data: sse.data ? JSON.parse(sse.data) : null,
+          id: sse.id,
+        };
+      }
+    }
+  }
+
+  /**
    * High-level helper that creates a task and polls until completion.
    * @param options The task creation payload along with polling configuration.
    * @returns The completed task object.

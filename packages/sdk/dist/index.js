@@ -174,6 +174,93 @@ var HttpClient = class {
   async get(path, options) {
     return this.request("GET", path, options);
   }
+  async *stream(path, options) {
+    const url = `${this.baseURL}${path.startsWith("/") ? path : `/${path}`}`;
+    let attempt = 0;
+    const headers = {
+      Authorization: `Bearer ${this.apiKey}`,
+      Accept: "text/event-stream",
+      ...options?.headers
+    };
+    while (attempt <= this.maxRetries) {
+      try {
+        const response = await fetch(url, { method: "GET", headers });
+        if (!response.ok) {
+          if ([429, 500, 502, 503, 504].includes(response.status) && attempt < this.maxRetries) {
+            attempt++;
+            const delay = calculateExponentialBackoff(attempt);
+            await sleep(delay);
+            continue;
+          }
+          await this.handleError(response);
+        }
+        if (!response.body) {
+          throw new SequentialAIError("Response body is empty");
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() || "";
+          let event = null;
+          let data = "";
+          let id = null;
+          for (const line of lines) {
+            if (line.trim() === "") {
+              if (data) {
+                yield { event, data: data.trim(), id };
+              }
+              event = null;
+              data = "";
+              id = null;
+            } else if (line.startsWith("event: ")) {
+              event = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+              data += line.slice(6) + "\n";
+            } else if (line.startsWith("id: ")) {
+              id = line.slice(4);
+            } else if (line.startsWith(":")) {
+            }
+          }
+        }
+        if (buffer.trim() !== "") {
+          const lines = buffer.split(/\r?\n/);
+          let event = null;
+          let data = "";
+          let id = null;
+          for (const line of lines) {
+            if (line.trim() === "") {
+              if (data) yield { event, data: data.trim(), id };
+              event = null;
+              data = "";
+              id = null;
+            } else if (line.startsWith("event: ")) {
+              event = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+              data += line.slice(6) + "\n";
+            } else if (line.startsWith("id: ")) {
+              id = line.slice(4);
+            }
+          }
+          if (data) yield { event, data: data.trim(), id };
+        }
+        return;
+      } catch (error) {
+        if (attempt < this.maxRetries) {
+          attempt++;
+          const delay = calculateExponentialBackoff(attempt);
+          await sleep(delay);
+          continue;
+        }
+        throw new SequentialAIError(`Network error while streaming: ${error.message}`);
+      }
+    }
+    throw new SequentialAIError("Max retries exceeded while trying to stream");
+  }
   async post(path, body, options) {
     return this.request("POST", path, { body, ...options });
   }
@@ -260,6 +347,22 @@ var Tasks = class {
    */
   async cancel(id) {
     return this.client.http.post(`/tasks/${id}/cancel`);
+  }
+  /**
+   * Streams task events for real-time updates.
+   * @param id The ID of the task to stream events for.
+   * @returns An async iterable iterator of task events.
+   */
+  async *stream(id) {
+    for await (const sse of this.client.http.stream(`/tasks/${id}/stream`)) {
+      if (sse.event !== "heartbeat") {
+        yield {
+          type: sse.event || "message",
+          data: sse.data ? JSON.parse(sse.data) : null,
+          id: sse.id
+        };
+      }
+    }
   }
   /**
    * High-level helper that creates a task and polls until completion.

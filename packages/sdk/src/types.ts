@@ -43,7 +43,10 @@ export interface CreateTaskRequest {
 export interface Task {
   id: string;
   status: TaskStatus;
-  output?: TaskOutput;
+  input?: Record<string, any>;
+  execution?: TaskExecution | { workerRuns: WorkerRun[], costTotal?: number, tokensUsed?: number, executionTimeMs?: number };
+  output?: TaskOutput | Record<string, any>;
+  sources?: any[];
 }
 
 export interface TaskOutput {

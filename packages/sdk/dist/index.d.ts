@@ -3,6 +3,11 @@ interface HttpClientOptions {
     apiKey: string;
     maxRetries: number;
 }
+interface ServerSentEvent {
+    event: string | null;
+    data: string;
+    id: string | null;
+}
 declare class HttpClient {
     private baseURL;
     private apiKey;
@@ -16,6 +21,9 @@ declare class HttpClient {
     get<T>(path: string, options?: {
         headers?: Record<string, string>;
     }): Promise<T>;
+    stream(path: string, options?: {
+        headers?: Record<string, string>;
+    }): AsyncIterableIterator<ServerSentEvent>;
     post<T>(path: string, body?: any, options?: {
         headers?: Record<string, string>;
     }): Promise<T>;
@@ -65,7 +73,15 @@ interface CreateTaskRequest {
 interface Task {
     id: string;
     status: TaskStatus;
-    output?: TaskOutput;
+    input?: Record<string, any>;
+    execution?: TaskExecution | {
+        workerRuns: WorkerRun[];
+        costTotal?: number;
+        tokensUsed?: number;
+        executionTimeMs?: number;
+    };
+    output?: TaskOutput | Record<string, any>;
+    sources?: any[];
 }
 interface TaskOutput {
     data: Record<string, any>;
@@ -127,6 +143,16 @@ declare class Tasks {
      * @returns The updated task.
      */
     cancel(id: string): Promise<Task>;
+    /**
+     * Streams task events for real-time updates.
+     * @param id The ID of the task to stream events for.
+     * @returns An async iterable iterator of task events.
+     */
+    stream(id: string): AsyncGenerator<{
+        type: string;
+        data: any;
+        id: string | null;
+    }, void, unknown>;
     /**
      * High-level helper that creates a task and polls until completion.
      * @param options The task creation payload along with polling configuration.
