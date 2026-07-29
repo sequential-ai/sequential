@@ -1,9 +1,11 @@
 const { WorkerError } = require("./errors");
+const BaseWorker = require("./base.worker");
 
 const DEFAULT_READER_ENDPOINT = "https://r.jina.ai";
 
-class ScraperWorker {
+class ScraperWorker extends BaseWorker {
   constructor(options = {}) {
+    super("scraper");
     this.apiKey = options.apiKey || process.env.JINA_API_KEY;
     this.readerEndpoint = (
       options.readerEndpoint ||
@@ -19,7 +21,11 @@ class ScraperWorker {
     }
   }
 
-  async run(input) {
+  getEventPrefix() {
+    return "scraper";
+  }
+
+  async run(input, taskContext) {
     const request = normalizeScrapeInput(input);
     const headers = {
       Accept: "application/json",
@@ -56,13 +62,11 @@ class ScraperWorker {
     }
 
     return {
-      provider: "jina",
       url: request.url,
       title: payload.data?.title || payload.title || null,
       description: payload.data?.description || payload.description || null,
       content: payload.data?.content || payload.content || "",
       links: payload.data?.links || payload.links || {},
-      raw: payload,
     };
   }
 }

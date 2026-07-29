@@ -1,9 +1,11 @@
 const { WorkerError } = require("./errors");
+const BaseWorker = require("./base.worker");
 
 const DEFAULT_SEARCH_ENDPOINT = "https://google.serper.dev/search";
 
-class SearchWorker {
+class SearchWorker extends BaseWorker {
   constructor(options = {}) {
+    super("search");
     this.apiKey = options.apiKey || process.env.SERPER_API_KEY;
     this.endpoint =
       options.endpoint || process.env.SERPER_API_URL || DEFAULT_SEARCH_ENDPOINT;
@@ -16,7 +18,11 @@ class SearchWorker {
     }
   }
 
-  async run(input) {
+  getEventPrefix() {
+    return "search";
+  }
+
+  async run(input, context) {
     const request = normalizeSearchInput(input);
 
     if (!this.apiKey) {
@@ -54,17 +60,21 @@ class SearchWorker {
       });
     }
 
-    return {
-      provider: "serper",
-      query: request.q,
-      organic: Array.isArray(payload.organic) ? payload.organic : [],
-      answerBox: payload.answerBox || null,
-      knowledgeGraph: payload.knowledgeGraph || null,
-      relatedSearches: Array.isArray(payload.relatedSearches)
-        ? payload.relatedSearches
-        : [],
-      raw: payload,
-    };
+    const domainResults = [];
+    const organic = Array.isArray(payload.organic) ? payload.organic : [];
+    
+    for (const r of organic) {
+      const searchResult = {
+        id: `search_result_${Math.random().toString(36).substr(2, 9)}`,
+        title: r.title,
+        url: r.link,
+        domain: new URL(r.link).hostname,
+        snippet: r.snippet
+      };
+      domainResults.push(searchResult);
+    }
+
+    return domainResults;
   }
 }
 

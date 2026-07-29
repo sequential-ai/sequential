@@ -1,14 +1,20 @@
 const { WorkerError } = require("./errors");
+const BaseWorker = require("./base.worker");
 const { OpenRouterWorker, parseJsonContent } = require("./openrouter.worker");
 
-class SubQueryWorker {
+class SubQueryWorker extends BaseWorker {
   constructor(options = {}) {
+    super("planner");
     this.llm = options.llm || new OpenRouterWorker(options);
     this.model = options.model;
     this.maxSubQueries = options.maxSubQueries || 8;
   }
 
-  async run(input) {
+  getEventPrefix() {
+    return "planner";
+  }
+
+  async run(input, taskContext) {
     const query = input?.query;
     if (typeof query !== "string" || !query.trim()) {
       throw new WorkerError("A research query is required", {
@@ -55,7 +61,11 @@ class SubQueryWorker {
       });
     }
 
-    return { ...result, subQueries };
+    return {
+      usage: result.usage,
+      subQueries,
+      estimatedSources: subQueries.length * 3
+    };
   }
 }
 

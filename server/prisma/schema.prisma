@@ -517,6 +517,7 @@ model Task {
   createdByUser User?        @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   workerRuns        WorkerRun[]
+  events            TaskEvent[]
   memories          Memory[]
   creditLedger      CreditLedgerEntry[]
   requestLogs       ApiRequestLog[]
@@ -555,6 +556,21 @@ model WorkerRun {
 
   @@index([taskId])
   @@index([status])
+}
+
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  sequence  Int
+  type      String
+  workerId  String?
+  payload   Json
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, sequence])
+  @@index([taskId])
 }
 
 // =========================================================================
