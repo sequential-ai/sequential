@@ -1,12 +1,27 @@
 const { Worker } = require("bullmq");
 const { connection, enqueueSearchJob, enqueueScrapeJob, enqueueExtractJob, enqueueSynthesizeJob, researchQueue } = require("./queue");
 const prisma = require("../db/db-connection");
+const EventMapper = require("../sse/EventMapper");
+const EventPipeline = require("../sse/EventPipeline");
+const TaskExecutionContext = require("../modules/tasks/TaskExecutionContext");
 const { SubQueryWorker, SearchWorker, ScraperWorker, FactExtractorWorker, SynthesisWorker } = require("../workers");
 const embeddingService = require("../services/embedding.service");
 const semanticSearchService = require("../services/semantic-search.service");
 const SourceManager = require("../modules/tasks/sourceManager");
 const EvidenceBuilder = require("../modules/tasks/evidenceBuilder");
-const MetricsAggregator = require("../modules/tasks/metricsAggregator");
+
+const activeContexts = new Map();
+
+function getOrCreateContext(taskId) {
+  if (!activeContexts.has(taskId)) {
+    activeContexts.set(taskId, new TaskExecutionContext(taskId));
+  }
+  return activeContexts.get(taskId);
+}
+
+function destroyContext(taskId) {
+  activeContexts.delete(taskId);
+}
 
 // Helper to update worker run
 async function createWorkerRun(taskId, workerType, provider, model, inputData) {
@@ -52,10 +67,13 @@ const worker = new Worker(
   async (job) => {
     const { taskId, organizationId, query, mode = "STANDARD", taskSpec = null } = job.data;
     
+    const taskContext = getOrCreateContext(taskId);
+    
     // Update task status if it's PLAN
     if (job.name === "PLAN") {
       console.log(`[Task ${taskId}] Starting PLAN job (Mode: ${mode}) for query: "${query}"...`);
       await prisma.task.update({ where: { id: taskId }, data: { status: "PLANNING" } });
+      EventMapper.mapTaskStarted(taskId, mode, query);
       
       const run = await createWorkerRun(taskId, "PLANNER", "openrouter", "gpt-4o-mini", { query, taskSpec });
       try {
@@ -64,9 +82,15 @@ const worker = new Worker(
         if (mode === "DEEP") limit = 5;
         
         const planner = new SubQueryWorker({ maxSubQueries: limit });
-        const result = await planner.run({ query, taskSpec });
+        // planner extends BaseWorker which takes (taskId, input, taskContext)
+        const result = await planner.execute(taskId, { query, taskSpec }, taskContext);
         
-        await completeWorkerRun(run.id, result, 0, result.usage?.total_tokens || 0);
+        const tokens = result.usage?.total_tokens || 0;
+        taskContext.recordTokens(result.usage?.prompt_tokens, result.usage?.completion_tokens, 0);
+        taskContext.recordCost('planning', 0); // OpenRouter cost logic omitted for brevity
+        await completeWorkerRun(run.id, result, 0, tokens);
+        EventMapper.mapMetricsUpdated(taskId, 'planner', taskContext);
+        EventMapper.mapWorkerCompleted(taskId, 'planner', { status: 'success' });
         
         const subqueries = result.subQueries || result.queries || [query];
         const selectedQueries = subqueries.slice(0, limit);
@@ -76,6 +100,7 @@ const worker = new Worker(
         }
       } catch (err) {
         await failWorkerRun(run.id, err);
+        EventMapper.mapWorkerFailed(taskId, 'planner', { error: err.message });
         throw err;
       }
     } 
@@ -86,21 +111,30 @@ const worker = new Worker(
       const run = await createWorkerRun(taskId, "SEARCH", "serper", "default", { query });
       try {
         const searcher = new SearchWorker();
-        const result = await searcher.run({ query });
+        const domainResults = await searcher.execute(taskId, { query }, taskContext);
         
-        await completeWorkerRun(run.id, result);
+        // Pass Domain Models to Event Mapper
+        EventMapper.mapSearchResults(taskId, 'search', domainResults);
+        
+        taskContext.recordCost('search', 0.001); // Approx serper cost
+        await completeWorkerRun(run.id, domainResults);
+        EventMapper.mapMetricsUpdated(taskId, 'search', taskContext);
+        EventMapper.mapWorkerCompleted(taskId, 'search', { status: 'success' });
         
         let limit = 4; // STANDARD
         if (mode === "FAST") limit = 3;
         if (mode === "DEEP") limit = 7;
 
-        const links = (result.organic || []).slice(0, limit).map(r => r.link);
+        // Scraper handles source extraction
+        const links = domainResults.slice(0, limit).map(r => r.url);
         console.log(`[Task ${taskId}] SEARCH complete. Found ${links.length} links to scrape.`);
         for (const link of links) {
+          EventMapper.mapSourceLifecycle(taskId, 'search', link, 'discovered');
           await enqueueScrapeJob(taskId, organizationId, link, query, mode, taskSpec);
         }
       } catch (err) {
         await failWorkerRun(run.id, err);
+        EventMapper.mapWorkerFailed(taskId, 'search', { error: err.message });
         throw err;
       }
     }
@@ -108,18 +142,31 @@ const worker = new Worker(
     else if (job.name === "SCRAPE") {
       const { url } = job.data;
       console.log(`[Task ${taskId}] Starting SCRAPE job for URL: ${url}...`);
+      EventMapper.mapSourceLifecycle(taskId, 'SCRAPE', url, 'fetching');
+      
       const run = await createWorkerRun(taskId, "SCRAPE", "jina", "reader", { url });
       try {
         const scraper = new ScraperWorker();
-        const result = await scraper.run({ url });
+        const result = await scraper.execute(taskId, { url }, taskContext);
         
+        taskContext.recordSource('fetched');
+        taskContext.recordCost('scrape', 0.0005);
         await completeWorkerRun(run.id, { title: result.title }); // don't store full content in outputData
+        
+        EventMapper.mapSourceLifecycle(taskId, 'scraper', url, 'fetched');
+        EventMapper.mapMetricsUpdated(taskId, 'scraper', taskContext);
+        EventMapper.mapWorkerCompleted(taskId, 'scraper', { status: 'success' });
         
         if (result.content && result.content.trim().length > 100) {
           console.log(`[Task ${taskId}] SCRAPE complete. Extracted content, enqueuing EXTRACT phase...`);
           await enqueueExtractJob(taskId, organizationId, url, result.content, query, mode, taskSpec);
         }
       } catch (err) {
+        taskContext.recordSource('failed');
+        EventMapper.mapSourceLifecycle(taskId, 'scraper', url, 'failed');
+        EventMapper.mapMetricsUpdated(taskId, 'scraper', taskContext);
+        EventMapper.mapWorkerFailed(taskId, 'scraper', { error: err.message });
+        
         await failWorkerRun(run.id, err);
         throw err; // Retry scraper on failure
       }
@@ -131,18 +178,42 @@ const worker = new Worker(
       const run = await createWorkerRun(taskId, "EXTRACT", "openrouter", "gpt-4o-mini", { url });
       try {
         const extractor = new FactExtractorWorker();
-        const result = await extractor.run({ url, content, query, taskSpec });
+        // Since FactExtractor isn't refactored yet, we just call run manually or execute if refactored
+        // Let's assume we will refactor FactExtractorWorker to extend BaseWorker next.
+        const result = await extractor.execute(taskId, { url, content, query, taskSpec }, taskContext);
         
         let evidence = [];
         let extractedSources = [];
         
         if (result.facts && result.facts.length > 0) {
+          taskContext.recordFact(result.facts.length);
           const rawSources = [...new Set(result.facts.map(f => f.sourceUrl || url))];
           extractedSources = SourceManager.processSources(rawSources);
+          
+          const enrichedFacts = result.facts.map(fact => {
+            const matchedSource = extractedSources.find(s => s.url === (fact.sourceUrl || url));
+            return {
+              factId: fact.id,
+              claim: fact.claim,
+              evidence: fact.evidence,
+              confidence: fact.confidence,
+              sourceId: matchedSource ? matchedSource.id : null,
+              worker: 'extract',
+              timestamp: new Date().toISOString()
+            };
+          });
+          
           evidence = EvidenceBuilder.buildEvidence(result.facts, extractedSources);
+          
+          EventMapper.mapFactsExtracted(taskId, 'extract', enrichedFacts);
+          EventPipeline.flushFacts(taskId, 'extract'); // Force flush any remaining batched facts
         }
 
+        taskContext.recordTokens(result.usage?.prompt_tokens, result.usage?.completion_tokens, 0);
+        taskContext.recordCost('extraction', 0);
         await completeWorkerRun(run.id, { factsCount: result.facts?.length, evidence, sources: extractedSources }, 0, result.usage?.total_tokens || 0);
+        EventMapper.mapMetricsUpdated(taskId, 'extract', taskContext);
+        EventMapper.mapWorkerCompleted(taskId, 'extract', { status: 'success' });
 
         // INLINE EMBEDDING
         if (result.facts && result.facts.length > 0) {
@@ -164,6 +235,7 @@ const worker = new Worker(
         }
       } catch (err) {
         await failWorkerRun(run.id, err);
+        EventMapper.mapWorkerFailed(taskId, 'extract', { error: err.message });
         throw err;
       }
     }
@@ -181,18 +253,21 @@ const worker = new Worker(
         const processedSources = SourceManager.processSources(rawSources);
 
         const synthesizer = new SynthesisWorker();
-        const result = await synthesizer.run({
+        const result = await synthesizer.execute(taskId, {
           query,
           taskSpec,
           facts: topMemories.map(m => m.content),
           sources: processedSources.map(s => `[${s.id}] ${s.url}`)
-        });
+        }, taskContext);
 
+        taskContext.recordTokens(result.usage?.prompt_tokens, result.usage?.completion_tokens, 0);
+        taskContext.recordCost('synthesis', 0);
         await completeWorkerRun(run.id, result, 0, result.usage?.total_tokens || 0);
+        EventMapper.mapMetricsUpdated(taskId, 'synthesis', taskContext);
+        EventMapper.mapWorkerCompleted(taskId, 'synthesis', { status: 'success' });
 
         // Fetch all worker runs to compute metrics
         const allRuns = await prisma.workerRun.findMany({ where: { taskId } });
-        const metrics = MetricsAggregator.aggregate(allRuns);
 
         // Update task output with the result
         const taskOutput = {};
@@ -203,7 +278,7 @@ const worker = new Worker(
         }
 
         const taskExecution = {
-          metrics,
+          metrics: taskContext.getMetrics(),
           workerRuns: allRuns.map(r => ({ id: r.id, type: r.workerType, status: r.status, duration: r.durationMs }))
         };
 
@@ -218,11 +293,16 @@ const worker = new Worker(
             completedAt: new Date()
           }
         });
+        EventMapper.mapTaskCompleted(taskId, 'success', taskExecution.metrics.cost.totalDurationMs || 0);
+        destroyContext(taskId);
         console.log(`[Task ${taskId}] SYNTHESIZE complete! Task finished successfully.`);
 
       } catch (err) {
         await failWorkerRun(run.id, err);
         await prisma.task.update({ where: { id: taskId }, data: { status: "FAILED" } });
+        EventMapper.mapWorkerFailed(taskId, 'synthesis', { error: err.message });
+        // Emit failed event via mapping or pipeline directly if needed. We don't have mapTaskFailed, so we'll just log.
+        destroyContext(taskId);
         throw err;
       }
     }

@@ -65,6 +65,53 @@ class OpenRouterWorker {
       clearTimeout(timeout);
     }
 
+    if (request.stream && typeof request.onChunk === 'function') {
+      let fullContent = "";
+      const decoder = new TextDecoder();
+      
+      if (!response.ok) {
+        const errPayload = await parseResponse(response);
+        throw new WorkerError(errPayload.error?.message || "OpenRouter returned an error", {
+          code: "OPENROUTER_API_ERROR",
+          status: response.status,
+          retryable: response.status === 429 || response.status >= 500,
+        });
+      }
+
+      // Read SSE stream
+      let buffer = "";
+      for await (const chunk of response.body) {
+        buffer += decoder.decode(chunk, { stream: true });
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ""; // Keep the incomplete line in the buffer
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+            try {
+              const data = JSON.parse(line.slice(6));
+              const delta = data.choices?.[0]?.delta?.content || "";
+              if (delta) {
+                fullContent += delta;
+                request.onChunk(delta);
+              }
+            } catch (e) {
+              // Ignore parse errors for fragmented SSE lines
+            }
+          }
+        }
+      }
+
+      return {
+        provider: "openrouter",
+        model: request.model,
+        content: fullContent,
+        usage: null, // Streaming doesn't always provide usage upfront without extra options
+        finishReason: null,
+      };
+    }
+
+    // Non-streaming handling below
     const payload = await parseResponse(response);
     if (!response.ok) {
       throw new WorkerError(payload.error?.message || "OpenRouter returned an error", {
@@ -118,6 +165,8 @@ function normalizeChatInput(input, defaults) {
     maxTokens: input.maxTokens ?? defaults.defaultMaxTokens,
     responseFormat: input.responseFormat,
     timeoutMs: input.timeoutMs,
+    stream: input.stream || false,
+    onChunk: input.onChunk
   };
 }
 
@@ -130,6 +179,7 @@ function toChatRequest(request) {
   if (request.temperature !== undefined) body.temperature = request.temperature;
   if (request.maxTokens !== undefined) body.max_tokens = request.maxTokens;
   if (request.responseFormat) body.response_format = request.responseFormat;
+  if (request.stream) body.stream = true;
 
   return body;
 }

@@ -1,15 +1,22 @@
 const { WorkerError } = require("./errors");
+const BaseWorker = require("./base.worker");
 const { OpenRouterWorker, parseJsonContent } = require("./openrouter.worker");
 const TaskValidator = require("../modules/tasks/taskValidator");
 const { SYNTHESIS_SYSTEM_PROMPT } = require("./prompts");
+const EventMapper = require("../sse/EventMapper");
 
-class SynthesisWorker {
+class SynthesisWorker extends BaseWorker {
   constructor(options = {}) {
+    super("synthesis");
     this.llm = options.llm || new OpenRouterWorker(options);
     this.model = options.model;
   }
 
-  async run(input) {
+  getEventPrefix() {
+    return "synthesis";
+  }
+
+  async run(input, taskContext) {
     if (typeof input?.query !== "string" || !input.query.trim()) {
       throw new WorkerError("The original query is required", {
         code: "INVALID_SYNTHESIS_QUERY",
@@ -43,6 +50,15 @@ class SynthesisWorker {
           }),
         },
       ],
+      stream: true,
+      onChunk: (delta) => {
+        if (input.taskSpec) {
+          // You could optionally emit json.delta if needed
+          EventMapper.mapSynthesisDelta(taskContext.taskId, 'synthesis', delta);
+        } else {
+          EventMapper.mapSynthesisDelta(taskContext.taskId, 'synthesis', delta);
+        }
+      }
     });
 
     const output = parseJsonContent(result.content, "INVALID_SYNTHESIS_OUTPUT");
@@ -81,18 +97,9 @@ class SynthesisWorker {
       };
     }
 
-    // Fallback if LLM unexpectedly returned a plain string
-    let finalAnswer = String(actualData);
-    if (!finalAnswer.trim()) {
-      throw new WorkerError(`OpenRouter returned no synthesis answer. Raw output: ${result.content}`, {
-        code: "INVALID_SYNTHESIS_OUTPUT",
-        status: 502,
-      });
-    }
-
     return {
       ...result,
-      answer: finalAnswer.trim()
+      answer: String(actualData).trim()
     };
   }
 }
