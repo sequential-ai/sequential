@@ -1,14 +1,20 @@
 const { WorkerError } = require("./errors");
+const BaseWorker = require("./base.worker");
 const { OpenRouterWorker, parseJsonContent } = require("./openrouter.worker");
 
-class FactExtractorWorker {
+class FactExtractorWorker extends BaseWorker {
   constructor(options = {}) {
+    super("extract");
     this.llm = options.llm || new OpenRouterWorker(options);
     this.model = options.model;
     this.maxFacts = options.maxFacts || 20;
   }
 
-  async run(input) {
+  getEventPrefix() {
+    return "extract";
+  }
+
+  async run(input, taskContext) {
     if (typeof input?.content !== "string" || !input.content.trim()) {
       throw new WorkerError("Page content is required", {
         code: "INVALID_FACT_INPUT",
@@ -44,6 +50,7 @@ class FactExtractorWorker {
           .filter((fact) => fact && typeof fact.claim === "string" && fact.claim.trim() && typeof fact.evidence === "string" && fact.evidence.trim())
           .slice(0, this.maxFacts)
           .map((fact) => ({
+            id: `fact_${Math.random().toString(36).substr(2, 9)}`,
             claim: fact.claim.trim(),
             evidence: fact.evidence.trim(),
             confidence: normalizeConfidence(fact.confidence),
@@ -52,7 +59,10 @@ class FactExtractorWorker {
           }))
       : [];
 
-    return { ...result, facts };
+    return {
+      usage: result.usage,
+      facts
+    };
   }
 }
 
