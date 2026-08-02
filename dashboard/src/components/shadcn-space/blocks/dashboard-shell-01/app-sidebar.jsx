@@ -478,11 +478,11 @@ const SequentialAppSidebar = ({ children }) => {
       </Dialog>
 
       {/* Main Content Inset */}
-      <SidebarInset className="flex flex-col min-h-screen">
-        <header className="sticky top-0 z-50 flex items-center border-b border-border px-6 py-3 bg-background">
+      <SidebarInset className="flex flex-col min-h-screen min-w-0 w-full overflow-x-hidden">
+        <header className="sticky top-0 z-50 flex items-center border-b border-border px-4 sm:px-6 py-2.5 bg-background">
           <SiteHeader />
         </header>
-        <main className="flex-1 p-6 md:p-8 bg-background">
+        <main className="flex-1 p-4 sm:p-6 bg-background min-w-0 w-full overflow-x-hidden">
           {children}
         </main>
       </SidebarInset>

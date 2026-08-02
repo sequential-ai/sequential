@@ -1,463 +1,581 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { useUser } from '@clerk/clerk-react'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { StatusBadge } from '@/components/StatusBadge'
+import { Input } from '@/components/ui/input'
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/components/ui/chart'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import {
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-} from 'recharts'
-import {
-  Plus,
   Sparkles,
+  Plus,
   ArrowUpRight,
   TrendingUp,
-  Cpu,
-  Layers,
-  KeyRound,
+  Globe,
   Zap,
   Clock,
-  Activity,
   CheckCircle2,
+  Cpu,
+  Layers,
+  Bot,
+  User,
+  ArrowRight,
+  Play,
+  RotateCw,
   Copy,
   Check,
-  Code2,
+  KeyRound,
+  Terminal,
+  Activity,
+  ShieldCheck,
+  Webhook,
+  ExternalLink,
 } from 'lucide-react'
-import { mockUsageData } from '@/lib/mock'
 
-const RECENT_TASKS = [
-  {
-    id: 'tsk_9f83a1b2',
-    prompt: 'Comprehensive market analysis for enterprise agentic AI architectures in 2026',
-    status: 'COMPLETED',
-    duration: '4.2s',
-    tokens: 42800,
-    cost: 0.0428,
-    workerCount: 6,
-    createdAt: '10 mins ago',
-  },
-  {
-    id: 'tsk_7e62c4d8',
-    prompt: 'Synthesize cross-border regulatory compliance guidelines for FinTech AI deployment',
-    status: 'RUNNING',
-    duration: '1.8s',
-    tokens: 18400,
-    cost: 0.0184,
-    workerCount: 4,
-    createdAt: '25 mins ago',
-  },
-  {
-    id: 'tsk_3b19f0a4',
-    prompt: 'Benchmarking latency and token efficiency across Claude 3.7 Sonnet vs OpenAI o3-mini',
-    status: 'COMPLETED',
-    duration: '3.1s',
-    tokens: 68100,
-    cost: 0.0681,
-    workerCount: 8,
-    createdAt: '2 hours ago',
-  },
-  {
-    id: 'tsk_1a4d8c2e',
-    prompt: 'Evaluate small-molecule oncological target candidates from PubMed literature',
-    status: 'COMPLETED',
-    duration: '5.4s',
-    tokens: 54000,
-    cost: 0.0540,
-    workerCount: 7,
-    createdAt: '5 hours ago',
-  },
-]
-
-const WORKER_DISTRIBUTION = [
-  { name: 'Search Workers', value: 45, color: '#F2541B' },
-  { name: 'Synthesis Engine', value: 30, color: '#C23DBE' },
-  { name: 'Verification & QA', value: 15, color: '#6B3DFF' },
-  { name: 'Planning & DAG', value: 10, color: '#CFF23A' },
-]
-
-const chartConfig = {
-  requests: { label: 'Pipeline Runs', color: '#F2541B' },
-  input: { label: 'Prompt Tokens', color: '#6B3DFF' },
-  output: { label: 'Completion Tokens', color: '#C23DBE' },
+// Compact Barcode / Segmented Vertical Bar Indicator Component
+function BarcodeIndicator({ total = 20, filled = 15, color = 'bg-primary', trackColor = 'bg-black/5 dark:bg-white/5' }) {
+  return (
+    <div className="flex items-center gap-1 w-full py-0.5">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className={`h-4 flex-1 rounded-xs transition-all ${
+            i < filled ? color : trackColor
+          }`}
+        />
+      ))}
+    </div>
+  )
 }
 
+const MONTHLY_DATA = [
+  { month: 'JAN', value: 180, formatted: '$180K', tokens: '14.2M' },
+  { month: 'FEB', value: 240, formatted: '$240K', tokens: '19.8M' },
+  { month: 'MAR', value: 210, formatted: '$210K', tokens: '17.4M' },
+  { month: 'APR', value: 310, formatted: '$310K', tokens: '25.6M' },
+  { month: 'MAY', value: 280, formatted: '$280K', tokens: '23.1M' },
+  { month: 'JUN', value: 420, formatted: '$420K', tokens: '34.8M' },
+  { month: 'JUL', value: 390, formatted: '$390K', tokens: '31.2M' },
+  { month: 'AUG', value: 640, formatted: '$640K', tokens: '52.4M', isPeak: true },
+  { month: 'SEP', value: 480, formatted: '$480K', tokens: '39.6M' },
+  { month: 'OCT', value: 350, formatted: '$350K', tokens: '28.9M' },
+  { month: 'NOV', value: 410, formatted: '$410K', tokens: '33.5M' },
+  { month: 'DEC', value: 520, formatted: '$520K', tokens: '43.0M' },
+]
+
 export default function Overview() {
-  const { dbUser, org, credits, apiKeys, syncStatus } = useAuth()
+  const { user } = useUser()
+  const { dbUser } = useAuth()
   const navigate = useNavigate()
-  const [copiedCode, setCopiedCode] = useState(false)
 
-  const activeKey = apiKeys?.[0]?.keyPrefix ? `${apiKeys[0].keyPrefix}••••••••` : 'seq_live_demo_key'
+  // User Display Name
+  const firstName = user?.firstName || dbUser?.name?.split(' ')[0] || 'Robert'
 
-  const curlCode = `curl -X POST http://localhost:5000/api/v1/tasks \\
-  -H "Content-Type: application/json" \\
-  -H "x-api-key: ${activeKey}" \\
-  -d '{
-    "prompt": "Deep research on agentic AI architectures",
-    "depth": "deep",
-    "verifySources": true,
-    "maxWorkers": 6
-  }'`
+  // State
+  const [selectedMonth, setSelectedMonth] = useState('AUG')
+  const [metricFilter, setMetricFilter] = useState('Net Revenue')
 
-  const pythonCode = `import sequential
+  // Quick Prompt Runner
+  const [quickPrompt, setQuickPrompt] = useState('')
+  const [isExecutingQuick, setIsExecutingQuick] = useState(false)
 
-client = sequential.Client(api_key="${activeKey}")
+  // Copy states
+  const [copiedKey, setCopiedKey] = useState(false)
+  const [copiedInstall, setCopiedInstall] = useState(false)
 
-task = client.tasks.create(
-    prompt="Deep research on agentic AI architectures",
-    depth="deep",
-    verify_sources=True,
-    max_workers=6
-)
+  // New Task Dialog
+  const [isNewTaskOpen, setIsNewTaskOpen] = useState(false)
+  const [newPrompt, setNewPrompt] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
 
-print(f"Task dispatched: {task.id}")
-report = task.wait_for_completion()
-print(report.markdown)`
+  const handleQuickRun = (e) => {
+    e.preventDefault()
+    if (!quickPrompt.trim() || isExecutingQuick) return
+    setIsExecutingQuick(true)
+    setTimeout(() => {
+      setIsExecutingQuick(false)
+      navigate('/dashboard/tasks')
+    }, 600)
+  }
 
-  const nodeCode = `import { Sequential } from '@sequential-ai/sdk';
+  const handleCreateTask = (e) => {
+    e.preventDefault()
+    if (!newPrompt.trim()) return
+    setIsCreating(true)
+    setTimeout(() => {
+      setIsCreating(false)
+      setIsNewTaskOpen(false)
+      navigate('/dashboard/tasks')
+    }, 600)
+  }
 
-const client = new Sequential({ apiKey: '${activeKey}' });
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText('sk_live_seq_9f83a1b24e62c4d8')
+    setCopiedKey(true)
+    setTimeout(() => setCopiedKey(false), 2000)
+  }
 
-const task = await client.tasks.create({
-  prompt: 'Deep research on agentic AI architectures',
-  depth: 'deep',
-  verifySources: true,
-  maxWorkers: 6
-});
-
-console.log('Synthesized Report:', await task.result());`
-
-  const handleCopyCode = (code) => {
-    navigator.clipboard.writeText(code)
-    setCopiedCode(true)
-    setTimeout(() => setCopiedCode(false), 2000)
+  const handleCopyInstall = () => {
+    navigator.clipboard.writeText('npm i @sequential-ai/sdk')
+    setCopiedInstall(true)
+    setTimeout(() => setCopiedInstall(false), 2000)
   }
 
   return (
-    <div className="space-y-5">
-      {/* Top Banner / Welcome */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl border border-border bg-card shadow-xs relative overflow-hidden">
-        <div className="space-y-1 relative z-10">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-primary/10 text-primary">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary pulse-dot" />
-              {org?.name || 'Sequential Workspace'}
-            </span>
-            <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">
-              • {syncStatus}
-            </span>
-          </div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight">
-            Welcome back, {dbUser?.firstName || 'Researcher'}
+    <div className="w-full max-w-full min-w-0 space-y-4">
+      {/* Compact Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
+            Hello, {firstName} <span className="animate-pulse">👋</span>
           </h1>
-          <p className="text-xs text-muted-foreground max-w-xl">
-            Autonomous multi-agent research pipelines are active. 6 parallel workers ready for orchestration.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Here is today's snapshot of task executions, credit spend, and agent operations.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 relative z-10 shrink-0">
-          <Button
-            onClick={() => navigate('/dashboard/tasks?new=true')}
-            className="rounded-lg h-8 px-3.5 text-xs font-semibold text-white shadow-xs"
-            style={{ background: 'var(--primary)' }}
+        {/* Quick Actions & CTAs */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* SDK Quick Copy */}
+          <button
+            type="button"
+            onClick={handleCopyInstall}
+            className="h-8 px-2.5 rounded-lg border border-border/80 bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground text-[11px] font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Copy SDK Install Command"
           >
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            Launch Deep Research
-          </Button>
+            <Terminal className="h-3 w-3 text-primary" />
+            <span>npm i @sequential-ai/sdk</span>
+            {copiedInstall ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3 opacity-60" />}
+          </button>
+
+          {/* Primary CTA */}
           <Button
-            variant="outline"
             size="sm"
-            onClick={() => navigate('/dashboard/api-keys')}
-            className="rounded-lg h-8 px-3 text-xs gap-1.5"
+            onClick={() => setIsNewTaskOpen(true)}
+            className="rounded-lg h-8 px-3.5 text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
+            style={{ background: 'var(--primary, #F2541B)' }}
           >
-            <KeyRound className="h-3.5 w-3.5" />
-            API Keys
+            
+            New Task
           </Button>
         </div>
-
-        <div
-          className="absolute -right-20 -top-20 w-56 h-56 rounded-full opacity-10 pointer-events-none blur-3xl"
-          style={{ background: 'var(--seq-grad)' }}
-        />
       </div>
 
-      {/* KPI Telemetry Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
+      {/* 4 Compact Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Metric 1: Synthesis Tasks */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Total Executions
-            </span>
-            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-              <Activity className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono">1,428</span>
-            <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/20 px-1 py-0 font-mono">
-              +14.2%
+            <span className="text-[11px] font-semibold text-muted-foreground">Synthesis Tasks</span>
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold px-1.5 py-0">
+              +12.8%
             </Badge>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Queries processed</p>
+
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-foreground tracking-tight">128</span>
+            <span className="text-[11px] text-muted-foreground font-mono">/ 160 tasks</span>
+          </div>
+
+          <BarcodeIndicator total={20} filled={16} color="bg-primary" />
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+            <span className="font-medium text-foreground">80% completed</span>
+            <span>32 in queue</span>
+          </div>
         </Card>
 
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
+        {/* Metric 2: Parallel Workers */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Token Volume
-            </span>
-            <div className="p-1.5 rounded-lg bg-violet-500/10 text-violet-400">
-              <Cpu className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono">1.82M</span>
-            <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/20 px-1 py-0 font-mono">
-              99.2% prompt
+            <span className="text-[11px] font-semibold text-muted-foreground">Parallel Workers</span>
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold px-1.5 py-0">
+              +3.5%
             </Badge>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Multi-model ingestion</p>
+
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-foreground tracking-tight">67</span>
+            <span className="text-[11px] text-muted-foreground font-mono">/ 90 nodes</span>
+          </div>
+
+          <BarcodeIndicator total={20} filled={15} color="bg-orange-400 dark:bg-orange-500" />
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+            <span className="font-medium text-foreground">74% utilized</span>
+            <span>23 available</span>
+          </div>
         </Card>
 
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
+        {/* Metric 3: Active Workflows */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Avg Turnaround
-            </span>
-            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
-              <Clock className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono">3.4s</span>
-            <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/20 px-1 py-0 font-mono">
-              -0.8s
+            <span className="text-[11px] font-semibold text-muted-foreground">Active Workflows</span>
+            <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-[10px] font-bold px-1.5 py-0">
+              -1.9%
             </Badge>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Parallel search latency</p>
+
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-foreground tracking-tight">21</span>
+            <span className="text-[11px] text-muted-foreground font-mono">/ 30 active</span>
+          </div>
+
+          <BarcodeIndicator total={20} filled={14} color="bg-rose-400/90 dark:bg-rose-500/90" />
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+            <span className="font-medium text-foreground">70% running</span>
+            <span>9 idle</span>
+          </div>
         </Card>
 
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
+        {/* Metric 4: API Latency & Health */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Available Credits
+            <span className="text-[11px] font-semibold text-muted-foreground">Pipeline Health</span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              99.98%
             </span>
-            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-              <Zap className="h-3.5 w-3.5" />
-            </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-emerald-400">
-              {credits.toLocaleString()}
-            </span>
-            <Link to="/dashboard/billing" className="text-[11px] text-primary hover:underline">
-              Top up
-            </Link>
+
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold text-foreground tracking-tight">1.18s</span>
+            <span className="text-[11px] text-muted-foreground font-mono">avg latency</span>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Developer Pro tier</p>
+
+          <BarcodeIndicator total={20} filled={19} color="bg-emerald-500" />
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+            <span className="font-medium text-foreground">0 errors</span>
+            <span>US-East & EU-West</span>
+          </div>
         </Card>
       </div>
 
-      {/* Analytics Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Token Throughput Area Chart */}
-        <Card className="lg:col-span-2 rounded-xl border-border bg-card shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
-            <div>
-              <CardTitle className="text-sm font-bold">Research Pipeline Telemetry</CardTitle>
-              <CardDescription className="text-xs">Daily token consumption & completion volume</CardDescription>
-            </div>
-            <Badge variant="outline" className="text-[10px] font-mono">Last 30 Days</Badge>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <ChartContainer config={chartConfig} className="h-[200px] w-full">
-              <AreaChart data={mockUsageData.tokensChart}>
-                <defs>
-                  <linearGradient id="seqOverviewGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F2541B" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#F2541B" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
-                <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={6} fontSize={10} interval={5} />
-                <YAxis tickLine={false} axisLine={false} tickMargin={6} fontSize={10} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Area
-                  type="monotone"
-                  dataKey="output"
-                  stroke="#F2541B"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#seqOverviewGrad)"
-                />
-              </AreaChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+      {/* Main Analytics Card & Quick Runner */}
+      <div className="space-y-4">
+        <Card className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs space-y-4">
+          {/* Chart Header */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="space-y-0.5">
+              <span className="text-[11px] font-semibold text-muted-foreground">Net Revenue / Credit Spend</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight font-sans">
+                  $640,000.00
+                </span>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-0.5">
+                  ↗ +8.2% <span className="font-normal text-muted-foreground text-[10px]">vs last month</span>
+                </span>
+              </div>
 
-        {/* Worker Node Distribution Donut */}
-        <Card className="rounded-xl border-border bg-card shadow-xs">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">Worker Concurrency</CardTitle>
-            <CardDescription className="text-xs">Inference load across sub-agents</CardDescription>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 flex flex-col items-center justify-center">
-            <div className="h-[140px] w-[140px] relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={WORKER_DISTRIBUTION} innerRadius={45} outerRadius={62} paddingAngle={3} dataKey="value">
-                    {WORKER_DISTRIBUTION.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-base font-bold font-mono">100%</span>
-                <span className="text-[9px] text-muted-foreground uppercase">Load</span>
+              {/* Sub Metrics */}
+              <div className="flex flex-wrap items-center gap-5 pt-2 text-xs">
+                <div>
+                  <span className="text-[10px] text-muted-foreground block">Peak Month</span>
+                  <span className="font-bold text-foreground text-[11px]">AUG $640K</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block">Monthly Avg</span>
+                  <span className="font-bold text-foreground text-[11px]">$232K</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground block">YTD Volume</span>
+                  <span className="font-bold text-foreground text-[11px]">348.6M tokens</span>
+                </div>
               </div>
             </div>
 
-            <div className="w-full space-y-1.5 mt-2">
-              {WORKER_DISTRIBUTION.map((item) => (
-                <div key={item.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                    <span className="text-muted-foreground text-[11px] truncate">{item.name}</span>
-                  </div>
-                  <span className="font-mono text-[11px] font-semibold">{item.value}%</span>
-                </div>
-              ))}
+            {/* Metric Filter Dropdown */}
+            <div className="flex items-center gap-2">
+              <select
+                value={metricFilter}
+                onChange={(e) => setMetricFilter(e.target.value)}
+                className="h-7 rounded-lg border border-border/80 bg-background px-2.5 text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
+              >
+                <option value="Net Revenue">Net Revenue</option>
+                <option value="Token Volume">Token Volume</option>
+                <option value="Worker Hours">Worker Hours</option>
+              </select>
             </div>
-          </CardContent>
+          </div>
+
+          {/* Compact Stylized Bar Chart */}
+          <div className="relative pt-4 pb-1">
+            {/* Dashed Horizontal Peak Reference Line */}
+            <div className="absolute top-7 left-0 right-0 border-b border-dashed border-border/80 flex items-center justify-start pointer-events-none">
+              <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded-sm bg-foreground text-background -translate-y-1/2">
+                $640K
+              </span>
+            </div>
+
+            {/* Bars */}
+            <div className="grid grid-cols-12 gap-1.5 sm:gap-2.5 items-end h-44 pt-6">
+              {MONTHLY_DATA.map((item) => {
+                const heightPercentage = Math.round((item.value / 640) * 100)
+                const isSelected = selectedMonth === item.month
+
+                return (
+                  <div
+                    key={item.month}
+                    onClick={() => setSelectedMonth(item.month)}
+                    className="flex flex-col items-center gap-1.5 group cursor-pointer h-full justify-end"
+                  >
+                    {/* Tooltip */}
+                    <div
+                      className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md transition-all ${
+                        isSelected || item.isPeak
+                          ? 'bg-primary text-white scale-100 opacity-100'
+                          : 'opacity-0 group-hover:opacity-100 bg-foreground text-background'
+                      }`}
+                    >
+                      {metricFilter === 'Token Volume' ? item.tokens : item.formatted}
+                    </div>
+
+                    {/* Bar Pill */}
+                    <div className="w-full bg-muted/40 rounded-t-md relative flex flex-col justify-end overflow-hidden h-full max-w-[36px]">
+                      <div
+                        style={{ height: `${heightPercentage}%` }}
+                        className={`w-full rounded-t-md transition-all duration-300 ${
+                          item.isPeak
+                            ? 'bg-primary shadow-xs'
+                            : isSelected
+                            ? 'bg-primary/80'
+                            : 'bg-primary/25 group-hover:bg-primary/45'
+                        }`}
+                      >
+                        {!item.isPeak && (
+                          <div className="w-full h-full opacity-35 bg-[linear-gradient(45deg,rgba(0,0,0,0.06)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.06)_50%,rgba(0,0,0,0.06)_75%,transparent_75%,transparent)] bg-[length:6px_6px]" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Month Label */}
+                    <span
+                      className={`text-[10px] font-mono font-medium transition-colors ${
+                        isSelected || item.isPeak
+                          ? 'text-primary font-bold'
+                          : 'text-muted-foreground group-hover:text-foreground'
+                      }`}
+                    >
+                      {item.month}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </Card>
+
+        {/* Quick Prompt Command Bar */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3 shadow-2xs">
+          <form onSubmit={handleQuickRun} className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Sparkles className="h-3.5 w-3.5" />
+            </div>
+            <Input
+              placeholder="Quick Task: Run market analysis, code audit, or research query..."
+              value={quickPrompt}
+              onChange={(e) => setQuickPrompt(e.target.value)}
+              className="h-8 text-xs bg-muted/30 border-border/70 rounded-lg flex-1"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!quickPrompt.trim() || isExecutingQuick}
+              className="rounded-lg h-8 px-3 text-xs font-bold text-white shadow-xs flex items-center gap-1 font-mono shrink-0"
+              style={{ background: 'var(--primary, #F2541B)' }}
+            >
+              {isExecutingQuick ? (
+                <RotateCw className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3 fill-current" />
+              )}
+              Run
+            </Button>
+          </form>
         </Card>
       </div>
 
-      {/* Recent Research Tasks Table */}
-      <Card className="rounded-xl border-border bg-card shadow-xs overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between px-4 py-3 border-b border-border">
-          <div>
-            <CardTitle className="text-sm font-bold">Recent Research Tasks</CardTitle>
-            <CardDescription className="text-xs">Live execution trace and output status</CardDescription>
+      {/* Operational Intelligence (3 Useful Modular Panels) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Panel 1: Model Routing Distribution */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <Cpu className="h-3.5 w-3.5 text-primary" />
+              Model Traffic Routing
+            </span>
+            <Badge variant="outline" className="text-[9px] font-mono">LIVE</Badge>
           </div>
-          <Button asChild variant="ghost" size="sm" className="rounded-lg text-xs h-7 gap-1">
-            <Link to="/dashboard/tasks">
-              View All <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border bg-muted/20 uppercase text-muted-foreground font-medium text-[10px]">
-                  <th className="py-2.5 px-4">Task ID</th>
-                  <th className="py-2.5 px-4">Research Objective</th>
-                  <th className="py-2.5 px-4">Status</th>
-                  <th className="py-2.5 px-4">Latency</th>
-                  <th className="py-2.5 px-4">Tokens</th>
-                  <th className="py-2.5 px-4">Cost</th>
-                  <th className="py-2.5 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {RECENT_TASKS.map((task) => (
-                  <tr key={task.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="py-2.5 px-4 font-mono font-medium text-foreground">
-                      <Link to={`/dashboard/tasks/${task.id}`} className="hover:text-primary transition-colors">
-                        {task.id}
-                      </Link>
-                    </td>
-                    <td className="py-2.5 px-4 max-w-sm truncate text-foreground font-medium">
-                      {task.prompt}
-                    </td>
-                    <td className="py-2.5 px-4 whitespace-nowrap">
-                      <StatusBadge status={task.status} />
-                    </td>
-                    <td className="py-2.5 px-4 font-mono text-muted-foreground">
-                      {task.duration}
-                    </td>
-                    <td className="py-2.5 px-4 font-mono text-muted-foreground">
-                      {task.tokens.toLocaleString()}
-                    </td>
-                    <td className="py-2.5 px-4 font-mono text-emerald-400 font-semibold">
-                      ${task.cost.toFixed(4)}
-                    </td>
-                    <td className="py-2.5 px-4 text-right">
-                      <Button asChild variant="ghost" size="xs" className="rounded-md h-6 text-[11px]">
-                        <Link to={`/dashboard/tasks/${task.id}`}>Inspect</Link>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Developer API Quickstart */}
-      <Card className="rounded-xl border-border bg-card shadow-xs overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between px-4 py-3 border-b border-border bg-muted/10">
-          <div className="flex items-center gap-2">
-            <Code2 className="h-4 w-4 text-primary" />
+          <div className="space-y-2 text-xs">
             <div>
-              <CardTitle className="text-sm font-bold">SDK & API Integration</CardTitle>
-              <CardDescription className="text-xs">Dispatch research tasks programmatically</CardDescription>
+              <div className="flex justify-between text-[11px] mb-1">
+                <span className="font-medium text-foreground">Claude 3.7 Sonnet (Hybrid)</span>
+                <span className="font-mono text-muted-foreground">58%</span>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full" style={{ width: '58%' }} />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-[11px] mb-1">
+                <span className="font-medium text-foreground">OpenAI o3-mini (Reasoning)</span>
+                <span className="font-mono text-muted-foreground">28%</span>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-orange-400 rounded-full" style={{ width: '28%' }} />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-[11px] mb-1">
+                <span className="font-medium text-foreground">Sequential Synthesis Core</span>
+                <span className="font-mono text-muted-foreground">14%</span>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '14%' }} />
+              </div>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => handleCopyCode(curlCode)}
-            className="rounded-md h-7 text-xs gap-1 cursor-pointer"
-          >
-            {copiedCode ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-            {copiedCode ? 'Copied' : 'Copy'}
-          </Button>
-        </CardHeader>
-        <CardContent className="p-4">
-          <Tabs defaultValue="curl" className="w-full">
-            <TabsList className="rounded-lg bg-muted/40 p-0.5 mb-3 h-7">
-              <TabsTrigger value="curl" className="rounded-md text-[11px] h-6 px-2.5">cURL</TabsTrigger>
-              <TabsTrigger value="python" className="rounded-md text-[11px] h-6 px-2.5">Python SDK</TabsTrigger>
-              <TabsTrigger value="node" className="rounded-md text-[11px] h-6 px-2.5">Node.js / TypeScript</TabsTrigger>
-            </TabsList>
+        </Card>
 
-            <TabsContent value="curl">
-              <pre className="p-3.5 rounded-lg bg-zinc-950 text-emerald-400 font-mono text-[11px] overflow-x-auto leading-relaxed border border-zinc-800">
-                <code>{curlCode}</code>
-              </pre>
-            </TabsContent>
+        {/* Panel 2: Live Webhooks & Event Delivery */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <Webhook className="h-3.5 w-3.5 text-primary" />
+              Webhook Endpoints
+            </span>
+            <Link to="/dashboard/webhooks" className="text-[10px] text-primary hover:underline font-semibold">
+              Manage
+            </Link>
+          </div>
 
-            <TabsContent value="python">
-              <pre className="p-3.5 rounded-lg bg-zinc-950 text-blue-400 font-mono text-[11px] overflow-x-auto leading-relaxed border border-zinc-800">
-                <code>{pythonCode}</code>
-              </pre>
-            </TabsContent>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/30 border border-border/60">
+              <div className="flex items-center gap-1.5 truncate max-w-[160px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="font-mono text-[10px] truncate">api.company.com/events</span>
+              </div>
+              <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-600 border-0">
+                200 OK
+              </Badge>
+            </div>
 
-            <TabsContent value="node">
-              <pre className="p-3.5 rounded-lg bg-zinc-950 text-amber-400 font-mono text-[11px] overflow-x-auto leading-relaxed border border-zinc-800">
-                <code>{nodeCode}</code>
-              </pre>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            <div className="flex items-center justify-between p-1.5 rounded-lg bg-muted/30 border border-border/60">
+              <div className="flex items-center gap-1.5 truncate max-w-[160px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="font-mono text-[10px] truncate">hooks.slack.com/services</span>
+              </div>
+              <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-600 border-0">
+                200 OK
+              </Badge>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground pt-0.5">
+              3 active endpoints · 99.98% delivery rate past 24h
+            </p>
+          </div>
+        </Card>
+
+        {/* Panel 3: Active Production API Key & Quickstart */}
+        <Card className="rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5 text-primary" />
+              Active API Key
+            </span>
+            <Link to="/dashboard/api-keys" className="text-[10px] text-primary hover:underline font-semibold">
+              View All
+            </Link>
+          </div>
+
+          <div className="p-2 rounded-lg bg-muted/40 border border-border/70 flex items-center justify-between">
+            <span className="font-mono text-[11px] text-foreground">sk_live_seq_••••8f9a</span>
+            <button
+              type="button"
+              onClick={handleCopyKey}
+              className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors p-1"
+              title="Copy API Key"
+            >
+              {copiedKey ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+            <span>Rate Limit: 1,000 req/min</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold font-mono">ACTIVE</span>
+          </div>
+        </Card>
+      </div>
+
+      {/* New Task Dialog */}
+      <Dialog open={isNewTaskOpen} onOpenChange={setIsNewTaskOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Create New Task Pipeline
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Execute multi-agent research with automated citations and synthesis.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateTask} className="space-y-3 mt-2">
+            <Textarea
+              placeholder="Ask any question, market synthesis, or structured analysis..."
+              value={newPrompt}
+              onChange={(e) => setNewPrompt(e.target.value)}
+              rows={4}
+              className="resize-none text-xs rounded-xl p-3"
+              required
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsNewTaskOpen(false)}
+                className="rounded-lg text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isCreating || !newPrompt.trim()}
+                className="rounded-lg text-xs font-bold text-white shadow-xs flex items-center gap-1.5 font-mono"
+                style={{ background: 'var(--primary, #F2541B)' }}
+              >
+                {isCreating ? (
+                  <>
+                    <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                    DISPATCHING...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3.5 w-3.5 fill-current" />
+                    RUN TASK
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

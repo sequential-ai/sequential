@@ -105,36 +105,36 @@
 }
 
 .dark {
-  /* Dark Theme */
-  --background: #16161b;
-  --foreground: #fafafa;
-  --card: #1c1c23;
-  --card-foreground: #fafafa;
-  --popover: #1c1c23;
-  --popover-foreground: #fafafa;
+  /* Dark Theme — Clean Zinc & Deep Black Palette */
+  --background: #0c0c0e; /* Slightly lighter than sidebar */
+  --foreground: #f4f4f5; /* Zinc-100 */
+  --card: #121215;       /* Refined zinc/black card surface */
+  --card-foreground: #f4f4f5;
+  --popover: #121215;
+  --popover-foreground: #f4f4f5;
   --primary: #F2541B;
   --primary-foreground: #FFFFFF;
-  --secondary: #22222b;
-  --secondary-foreground: #fafafa;
-  --muted: #22222b;
-  --muted-foreground: #a1a1aa;
-  --accent: #22222b;
-  --accent-foreground: #fafafa;
+  --secondary: #18181b; /* Zinc-900 */
+  --secondary-foreground: #f4f4f5;
+  --muted: #18181b;      /* Zinc-900 */
+  --muted-foreground: #a1a1aa; /* Zinc-400 */
+  --accent: #1c1c20;
+  --accent-foreground: #f4f4f5;
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
-  --border: #2a2a35;
-  --input: #2a2a35;
+  --border: #202024;     /* Crisp subtle dark zinc border */
+  --input: #202024;
   --ring: #F2541B;
   --radius: 0.5rem;
 
-  /* Sidebar dark tokens */
-  --sidebar: #101014;
-  --sidebar-foreground: #fafafa;
+  /* Sidebar dark tokens — Deep Zinc-950 / True Black */
+  --sidebar: #08080a;
+  --sidebar-foreground: #f4f4f5;
   --sidebar-primary: #F2541B;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1e1e26;
-  --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: #23232c;
+  --sidebar-accent: #121215;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: #17171a;
   --sidebar-ring: #F2541B;
 }
 

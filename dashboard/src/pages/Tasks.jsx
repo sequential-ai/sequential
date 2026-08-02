@@ -114,7 +114,7 @@ export default function Tasks() {
   const [mode, setMode] = useState('FAST') // FAST | STANDARD | DEEP
   const [isStructuredOutput, setIsStructuredOutput] = useState(false)
   const [schemaTemplate, setSchemaTemplate] = useState('{\n  "title": "string",\n  "keyFindings": ["string"],\n  "confidenceScore": 0.95\n}')
-  
+
   // Execution State
   const [isRunning, setIsRunning] = useState(false)
   const [currentResult, setCurrentResult] = useState(null)
@@ -144,8 +144,8 @@ export default function Tasks() {
         mode === 'DEEP'
           ? 'Dispatching 6 parallel research workers...'
           : mode === 'STANDARD'
-          ? 'Dispatching 4 research workers...'
-          : 'Querying synthesis engine...'
+            ? 'Dispatching 4 research workers...'
+            : 'Querying synthesis engine...'
       )
     }, 600)
 
@@ -168,14 +168,14 @@ export default function Tasks() {
           answer: `### Results for "${prompt}"\n\nSequential AI synthesized results across multiple verified sources.\n\n1. **Core Findings**: The research pipeline parsed domain metrics, identifying key dependencies and quantitative indicators.\n2. **Optimization Opportunities**: Integrating structured pipelines yields a **3.4x throughput increase** with minimal latency.\n3. **Recommended Next Steps**: Deploy task webhooks to stream step-by-step progress events directly into your application stack.`,
           structuredData: isStructuredOutput
             ? {
-                title: prompt.slice(0, 40),
-                keyFindings: [
-                  'High confidence extraction completed',
-                  'Zero cascade hallucination detected',
-                  'Latency within acceptable thresholds',
-                ],
-                confidenceScore: 0.98,
-              }
+              title: prompt.slice(0, 40),
+              keyFindings: [
+                'High confidence extraction completed',
+                'Zero cascade hallucination detected',
+                'Latency within acceptable thresholds',
+              ],
+              confidenceScore: 0.98,
+            }
             : null,
           sources: [
             { title: 'Sequential Research Index', url: 'https://docs.sequential.ai' },
@@ -203,7 +203,7 @@ export default function Tasks() {
   // Generate Code Snippets
   const getCodeSnippet = () => {
     const currentQuery = prompt || 'Analyze recent trends in enterprise agentic AI architectures in 2026'
-    
+
     if (selectedLanguage === 'python') {
       return `import sequential
 
@@ -213,11 +213,10 @@ client = sequential.Client(api_key="sk_live_seq_...")
 # Create & Run Task
 task = client.tasks.create(
     query="${currentQuery}",
-    mode="${mode}",${
-      isStructuredOutput
-        ? `\n    task_spec={\n        "format": "json",\n        "schema": ${schemaTemplate}\n    }`
-        : ''
-    }
+    mode="${mode}",${isStructuredOutput
+          ? `\n    task_spec={\n        "format": "json",\n        "schema": ${schemaTemplate}\n    }`
+          : ''
+        }
 )
 
 print(f"Task ID: {task.id} | Status: {task.status}")
@@ -234,11 +233,10 @@ const client = new SequentialAI({
 async function run() {
   const task = await client.tasks.create({
     query: "${currentQuery}",
-    mode: "${mode}",${
-      isStructuredOutput
-        ? `\n    taskSpec: {\n      format: "json",\n      schema: ${schemaTemplate}\n    },`
-        : ''
-    }
+    mode: "${mode}",${isStructuredOutput
+          ? `\n    taskSpec: {\n      format: "json",\n      schema: ${schemaTemplate}\n    },`
+          : ''
+        }
   });
 
   console.log("Task ID:", task.id);
@@ -253,11 +251,10 @@ run();`
   -H "Content-Type: application/json" \\
   -d '{
     "query": "${currentQuery}",
-    "mode": "${mode}"${
-      isStructuredOutput
+    "mode": "${mode}"${isStructuredOutput
         ? `,\n    "taskSpec": { "format": "json" }`
         : ''
-    }
+      }
   }'`
   }
 
@@ -273,15 +270,14 @@ run();`
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Task API</h1>
-          
+
           <button
             type="button"
             onClick={() => setActiveView(activeView === 'playground' ? 'history' : 'playground')}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold font-mono uppercase transition-all cursor-pointer border ${
-              activeView === 'history'
-                ? 'bg-foreground text-background border-foreground'
-                : 'border-border/80 text-muted-foreground hover:text-foreground bg-card hover:bg-muted'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold font-mono uppercase transition-all cursor-pointer border ${activeView === 'history'
+              ? 'bg-foreground text-background border-foreground'
+              : 'border-border/80 text-muted-foreground hover:text-foreground bg-card hover:bg-muted'
+              }`}
           >
             <Clock className="h-3.5 w-3.5" />
             HISTORY
@@ -406,11 +402,10 @@ run();`
                         key={m}
                         type="button"
                         onClick={() => setMode(m)}
-                        className={`px-2 py-1 rounded-md text-[10px] font-mono font-semibold uppercase transition-all cursor-pointer ${
-                          mode === m
-                            ? 'bg-background text-primary shadow-2xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
+                        className={`px-2 py-1 rounded-md text-[10px] font-mono font-semibold uppercase transition-all cursor-pointer ${mode === m
+                          ? 'bg-background text-primary shadow-2xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                          }`}
                       >
                         {m}
                       </button>
@@ -528,33 +523,30 @@ run();`
                       <button
                         type="button"
                         onClick={() => setActiveResultTab('output')}
-                        className={`font-semibold cursor-pointer transition-colors ${
-                          activeResultTab === 'output'
-                            ? 'text-primary border-b-2 border-primary pb-1 -mb-2'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
+                        className={`font-semibold cursor-pointer transition-colors ${activeResultTab === 'output'
+                          ? 'text-primary border-b-2 border-primary pb-1 -mb-2'
+                          : 'text-muted-foreground hover:text-foreground'
+                          }`}
                       >
                         Synthesis Output
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveResultTab('trace')}
-                        className={`font-semibold cursor-pointer transition-colors ${
-                          activeResultTab === 'trace'
-                            ? 'text-primary border-b-2 border-primary pb-1 -mb-2'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
+                        className={`font-semibold cursor-pointer transition-colors ${activeResultTab === 'trace'
+                          ? 'text-primary border-b-2 border-primary pb-1 -mb-2'
+                          : 'text-muted-foreground hover:text-foreground'
+                          }`}
                       >
                         Execution Trace ({currentResult.workerCount} workers)
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveResultTab('json')}
-                        className={`font-semibold cursor-pointer transition-colors ${
-                          activeResultTab === 'json'
-                            ? 'text-primary border-b-2 border-primary pb-1 -mb-2'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
+                        className={`font-semibold cursor-pointer transition-colors ${activeResultTab === 'json'
+                          ? 'text-primary border-b-2 border-primary pb-1 -mb-2'
+                          : 'text-muted-foreground hover:text-foreground'
+                          }`}
                       >
                         Raw JSON
                       </button>
@@ -795,11 +787,10 @@ run();`
                 key={lang.id}
                 type="button"
                 onClick={() => setSelectedLanguage(lang.id)}
-                className={`px-3 py-1 rounded-md text-xs font-mono font-semibold transition-all cursor-pointer ${
-                  selectedLanguage === lang.id
-                    ? 'bg-primary text-white shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
+                className={`px-3 py-1 rounded-md text-xs font-mono font-semibold transition-all cursor-pointer ${selectedLanguage === lang.id
+                  ? 'bg-primary text-white shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
               >
                 {lang.label}
               </button>

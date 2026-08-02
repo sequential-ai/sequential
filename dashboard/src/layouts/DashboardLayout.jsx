@@ -5,7 +5,7 @@ import SequentialAppSidebar from '@/components/shadcn-space/blocks/dashboard-she
 export default function DashboardLayout() {
   return (
     <SequentialAppSidebar>
-      <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
+      <div className="w-full max-w-6xl mx-auto space-y-6 animate-fade-in min-w-0">
         <Outlet />
       </div>
     </SequentialAppSidebar>
