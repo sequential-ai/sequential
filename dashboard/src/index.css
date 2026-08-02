@@ -1,1 +1,220 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =============================================
+   TAILWIND V4 THEME MAPPINGS
+   ============================================= */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --popover: var(--popover);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+/* =============================================
+   SEQUENTIAL AI — DESIGN TOKENS
+   ============================================= */
+:root {
+  /* Light Theme */
+  /* Main Content: slightly lighter than sidebar (#FAF8F5 vs #EFE8DB) */
+  --background: #FAF8F5;
+  --foreground: #17140F;
+  --card: #FFFFFF;
+  --card-foreground: #17140F;
+  --popover: #FFFFFF;
+  --popover-foreground: #17140F;
+  --primary: #FB631B;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F4EFE6;
+  --secondary-foreground: #2C281E;
+  --muted: #F2EDE3;
+  --muted-foreground: #7C7665;
+  --accent: #F2EDE3;
+  --accent-foreground: #2C281E;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #E8E2D2;
+  --input: #E8E2D2;
+  --ring: #F2541B;
+  --radius: 0.5rem;
+
+  /* Sidebar tokens: rich cream #EFE8DB */
+  --sidebar: #EFE8DB;
+  --sidebar-foreground: #17140F;
+  --sidebar-primary: #F2541B;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E5DFC9;
+  --sidebar-accent-foreground: #17140F;
+  --sidebar-border: #E5DFC9;
+  --sidebar-ring: #F2541B;
+
+  /* Sequential brand tokens */
+  --seq-cream: #F6F1E9;
+  --seq-cream-2: #EFE8DB;
+  --seq-peach: #FCEBDD;
+  --seq-ink: #17140F;
+  --seq-ink-soft: #4A4636;
+  --seq-muted: #928C77;
+  --seq-orange: #F2541B;
+  --seq-orange-2: #FF7A3D;
+  --seq-orange-soft: rgba(242, 84, 27, 0.12);
+  --seq-lime: #CFF23A;
+  --seq-lime-ink: #16210A;
+  --seq-lime-soft: rgba(207, 242, 58, 0.15);
+  --seq-purple: #C23DBE;
+  --seq-violet: #6B3DFF;
+  --seq-grad: linear-gradient(90deg, #FF9245 0%, #F2541B 30%, #C23DBE 65%, #6B3DFF 100%);
+  --seq-btn-grad: linear-gradient(135deg, #FF7A3D 0%, #F2541B 100%);
+
+  /* Typography */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+.dark {
+  /* Dark Theme */
+  --background: #16161b;
+  --foreground: #fafafa;
+  --card: #1c1c23;
+  --card-foreground: #fafafa;
+  --popover: #1c1c23;
+  --popover-foreground: #fafafa;
+  --primary: #F2541B;
+  --primary-foreground: #FFFFFF;
+  --secondary: #22222b;
+  --secondary-foreground: #fafafa;
+  --muted: #22222b;
+  --muted-foreground: #a1a1aa;
+  --accent: #22222b;
+  --accent-foreground: #fafafa;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #2a2a35;
+  --input: #2a2a35;
+  --ring: #F2541B;
+  --radius: 0.5rem;
+
+  /* Sidebar dark tokens */
+  --sidebar: #101014;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #F2541B;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1e1e26;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #23232c;
+  --sidebar-ring: #F2541B;
+}
+
+/* =============================================
+   BASE STYLES
+   ============================================= */
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+}
+
+/* Ensure all popovers & dialogs are completely solid */
+[data-slot="popover-content"],
+[data-slot="dropdown-menu-content"],
+[data-slot="select-content"],
+[data-slot="dialog-content"],
+[role="dialog"],
+[role="menu"] {
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  opacity: 1 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--muted-foreground); border-radius: 4px; opacity: 0.2; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(242, 84, 27, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(242, 84, 27, 0.4); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+/* Sequential gradient bar & button */
+.seq-gradient-bar {
+  background: var(--seq-grad);
+}
+
+.seq-btn-primary {
+  background: var(--primary);
+  color: #FFFFFF;
+  font-weight: 500;
+  border-radius: var(--radius);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.seq-btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+.seq-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Focus rings */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--primary);
+}
