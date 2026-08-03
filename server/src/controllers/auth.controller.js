@@ -13,15 +13,76 @@ const userInclude = {
     memberships: {
         include: {
             organization: {
-                include: {
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    logoUrl: true,
+                    clerkOrgId: true,
+                    metadata: true,
+                    createdAt: true,
                     subscription: {
                         include: { plan: true }
                     },
-                    apiKeys: true,
-                    creditLedger: true
+                    creditLedger: {
+                        select: { amount: true }
+                    }
                 }
             }
         }
+    }
+};
+
+/**
+ * Helper: Fetch pending invitations for an email
+ */
+const getPendingInvitesForEmail = async (email) => {
+    if (!email) return [];
+    try {
+        const rawInvites = await prisma.organizationInvite.findMany({
+            where: {
+                email: email.toLowerCase().trim(),
+                status: 'PENDING',
+                expiresAt: { gt: new Date() }
+            },
+            include: {
+                organization: {
+                    select: {
+                        id: true,
+                        name: true,
+                        slug: true,
+                        logoUrl: true
+                    }
+                },
+                invitedByUser: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        return rawInvites.map(inv => ({
+            id: inv.id,
+            inviteId: inv.id,
+            token: inv.token,
+            email: inv.email,
+            role: inv.role,
+            status: inv.status,
+            expiresAt: inv.expiresAt,
+            createdAt: inv.createdAt,
+            organization: inv.organization,
+            invitedBy: inv.invitedByUser
+                ? `${inv.invitedByUser.firstName || ''} ${inv.invitedByUser.lastName || ''}`.trim() || inv.invitedByUser.email
+                : 'Team Admin'
+        }));
+    } catch (err) {
+        console.warn('Error fetching pending invites:', err.message);
+        return [];
     }
 };
 
@@ -44,100 +105,48 @@ const registerUser = async (req, res) => {
                     { clerkUserId },
                     { email }
                 ]
-            }
+            },
+            include: userInclude
         });
 
         if (existingUser) {
-            return res.status(400).json({ success: false, message: "User already exists" });
+            const pendingInvites = await getPendingInvitesForEmail(existingUser.email);
+            existingUser.pendingInvites = pendingInvites;
+            const token = generateToken(existingUser.clerkUserId);
+            return res.status(200).json({
+                success: true,
+                message: "User already exists",
+                token,
+                data: existingUser
+            });
         }
 
-        // Run everything in a transaction to ensure all or nothing
-        const result = await prisma.$transaction(async (tx) => {
-            // 1. Create the User
-            const newUser = await tx.user.create({
-                data: {
-                    clerkUserId,
-                    email,
-                    firstName,
-                    lastName,
-                    imageUrl,
-                }
-            });
-
-            // 2. Create the Organization (Personal Workspace)
-            const orgName = `${firstName || 'User'}'s Workspace`;
-            const orgSlug = `workspace-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-            const clerkOrgId = `org_${Date.now()}_${clerkUserId}`;
-
-            const newOrg = await tx.organization.create({
-                data: {
-                    clerkOrgId,
-                    name: orgName,
-                    slug: orgSlug,
-                }
-            });
-
-            // 3. Add User to Organization as OWNER
-            await tx.organizationMember.create({
-                data: {
-                    organizationId: newOrg.id,
-                    userId: newUser.id,
-                    role: 'OWNER',
-                }
-            });
-
-            // 4. Create or fetch Free Plan and Subscription
-            const freePlan = await tx.plan.upsert({
-                where: { key: 'free' },
-                update: {},
-                create: {
-                    key: 'free',
-                    name: 'Free Plan',
-                    monthlyPrice: 0,
-                    yearlyPrice: 0,
-                    maxMembers: 1,
-                    maxApiKeys: 1,
-                    maxProjects: 1,
-                    storageLimitGb: 1,
-                    monthlyCredits: 100, // default credits
-                    monthlyRequestLimit: 1000,
-                    rateLimitPerMinute: 60,
-                }
-            });
-
-            await tx.subscription.create({
-                data: {
-                    organizationId: newOrg.id,
-                    planId: freePlan.id,
-                    provider: 'Razorpay',
-                    status: 'ACTIVE',
-                }
-            });
-
-            // Initial Credit Grant
-            await tx.creditLedgerEntry.create({
-                data: {
-                    organizationId: newOrg.id,
-                    amount: freePlan.monthlyCredits,
-                    balanceAfter: freePlan.monthlyCredits,
-                    type: 'GRANT',
-                    reason: 'Initial Signup Grant'
-                }
-            });
-
-            return { newUser };
+        // Create the User (organization will be created or joined during onboarding)
+        const newUser = await prisma.user.create({
+            data: {
+                clerkUserId,
+                email,
+                firstName,
+                lastName,
+                imageUrl,
+            }
         });
 
         const fullyPopulatedUser = await prisma.user.findUnique({
-            where: { id: result.newUser.id },
+            where: { id: newUser.id },
             include: userInclude
         });
+
+        const pendingInvites = await getPendingInvitesForEmail(email);
+        if (fullyPopulatedUser) {
+            fullyPopulatedUser.pendingInvites = pendingInvites;
+        }
 
         const token = generateToken(fullyPopulatedUser.clerkUserId);
 
         res.status(201).json({
             success: true,
-            message: "User registered and workspace provisioned successfully",
+            message: "User registered successfully. Please proceed with onboarding.",
             token,
             data: fullyPopulatedUser
         });
@@ -173,6 +182,9 @@ const loginUser = async (req, res) => {
             return res.status(404).json({ success: false, message: "User not found in database. Please register first." });
         }
 
+        const pendingInvites = await getPendingInvitesForEmail(user.email);
+        user.pendingInvites = pendingInvites;
+
         const token = generateToken(user.clerkUserId);
 
         res.status(200).json({
@@ -193,9 +205,6 @@ const loginUser = async (req, res) => {
  */
 const logoutUser = async (req, res) => {
     try {
-        // Since Clerk handles the actual authentication session, 
-        // this endpoint can be used to clear any custom backend sessions, cookies, or perform logging.
-        // For now, we'll just return a success message.
         res.status(200).json({
             success: true,
             message: "User logged out successfully"
@@ -226,6 +235,9 @@ const getProfile = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found" });
         }
+
+        const pendingInvites = await getPendingInvitesForEmail(user.email);
+        user.pendingInvites = pendingInvites;
 
         res.status(200).json({
             success: true,
@@ -270,6 +282,8 @@ const createOrganization = async (req, res) => {
                     slug: orgSlug,
                     metadata: {
                         surveyAnswers,
+                        onboarded: true,
+                        onboardedAt: new Date().toISOString()
                     }
                 }
             });
@@ -355,6 +369,11 @@ const createOrganization = async (req, res) => {
             include: userInclude
         });
 
+        const pendingInvites = await getPendingInvitesForEmail(user.email);
+        if (updatedUser) {
+            updatedUser.pendingInvites = pendingInvites;
+        }
+
         res.status(201).json({
             success: true,
             message: "Organization created successfully",
@@ -369,10 +388,187 @@ const createOrganization = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Accept an organization invite
+ * @route   POST /api/v1/auth/invites/:inviteId/accept
+ */
+const acceptOrganizationInvite = async (req, res) => {
+    try {
+        const clerkUserId = req.user.id;
+        const { inviteId } = req.params;
+
+        const user = await prisma.user.findUnique({
+            where: { clerkUserId }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        // Find the pending invite by ID matching user's email
+        const invite = await prisma.organizationInvite.findFirst({
+            where: {
+                id: inviteId,
+                status: 'PENDING'
+            },
+            include: {
+                organization: true
+            }
+        });
+
+        if (!invite) {
+            return res.status(404).json({ success: false, message: "Invitation not found or already accepted/expired" });
+        }
+
+        // Check if user is already a member
+        const existingMember = await prisma.organizationMember.findUnique({
+            where: {
+                organizationId_userId: {
+                    organizationId: invite.organizationId,
+                    userId: user.id
+                }
+            }
+        });
+
+        if (!existingMember) {
+            // Create membership
+            await prisma.organizationMember.create({
+                data: {
+                    organizationId: invite.organizationId,
+                    userId: user.id,
+                    role: invite.role || 'DEVELOPER'
+                }
+            });
+        }
+
+        // Update invite to ACCEPTED
+        await prisma.organizationInvite.update({
+            where: { id: invite.id },
+            data: {
+                status: 'ACCEPTED',
+                acceptedAt: new Date()
+            }
+        });
+
+        // Record audit log
+        await prisma.auditLog.create({
+            data: {
+                organizationId: invite.organizationId,
+                actorUserId: user.id,
+                category: 'MEMBER',
+                action: 'member.joined',
+                metadata: {
+                    email: user.email,
+                    role: invite.role,
+                    inviteId: invite.id
+                }
+            }
+        }).catch(e => console.warn('AuditLog error:', e.message));
+
+        // Fetch refreshed user profile
+        const updatedUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: userInclude
+        });
+
+        const pendingInvites = await getPendingInvitesForEmail(user.email);
+        if (updatedUser) {
+            updatedUser.pendingInvites = pendingInvites;
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully joined ${invite.organization?.name || 'organization'}!`,
+            data: {
+                organization: invite.organization,
+                user: updatedUser
+            }
+        });
+    } catch (error) {
+        console.error("Accept Invite Error:", error);
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
+/**
+ * @desc    Decline an organization invite
+ * @route   POST /api/v1/auth/invites/:inviteId/decline
+ */
+const declineOrganizationInvite = async (req, res) => {
+    try {
+        const clerkUserId = req.user.id;
+        const { inviteId } = req.params;
+
+        const user = await prisma.user.findUnique({
+            where: { clerkUserId }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const invite = await prisma.organizationInvite.findFirst({
+            where: {
+                id: inviteId,
+                status: 'PENDING'
+            }
+        });
+
+        if (!invite) {
+            return res.status(404).json({ success: false, message: "Invitation not found" });
+        }
+
+        await prisma.organizationInvite.update({
+            where: { id: invite.id },
+            data: { status: 'REVOKED' }
+        });
+
+        const pendingInvites = await getPendingInvitesForEmail(user.email);
+
+        res.status(200).json({
+            success: true,
+            message: "Invitation declined",
+            data: { pendingInvites }
+        });
+    } catch (error) {
+        console.error("Decline Invite Error:", error);
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
+/**
+ * @desc    Get pending invites for currently logged-in user
+ * @route   GET /api/v1/auth/invites/pending
+ */
+const getPendingUserInvites = async (req, res) => {
+    try {
+        const clerkUserId = req.user.id;
+        const user = await prisma.user.findUnique({
+            where: { clerkUserId }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const pendingInvites = await getPendingInvitesForEmail(user.email);
+        res.status(200).json({
+            success: true,
+            data: pendingInvites
+        });
+    } catch (error) {
+        console.error("Get Pending Invites Error:", error);
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     logoutUser,
     getProfile,
-    createOrganization
+    createOrganization,
+    acceptOrganizationInvite,
+    declineOrganizationInvite,
+    getPendingUserInvites,
 };

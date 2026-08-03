@@ -2,26 +2,12 @@ const crypto = require("crypto");
 const prisma = require("../db/db-connection");
 
 /**
- * @desc    Get all API keys for the user's organization
+ * @desc    Get all API keys for the active organization
  * @route   GET /api/v1/apikeys
  */
 const getApiKeys = async (req, res) => {
     try {
-        const clerkUserId = req.user.id;
-
-        // Find user and their primary organization
-        const user = await prisma.user.findUnique({
-            where: { clerkUserId },
-            include: {
-                memberships: true,
-            }
-        });
-
-        if (!user || user.memberships.length === 0) {
-            return res.status(404).json({ success: false, message: "User or organization not found" });
-        }
-
-        const organizationId = user.memberships[0].organizationId;
+        const organizationId = req.organizationId;
 
         // Fetch API keys (excluding the hash for security)
         const apiKeys = await prisma.apiKey.findMany({
@@ -37,6 +23,14 @@ const getApiKeys = async (req, res) => {
                 createdAt: true,
                 revokedAt: true,
                 expiresAt: true,
+                createdByUser: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                }
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -55,18 +49,8 @@ const getApiKeys = async (req, res) => {
 const createApiKey = async (req, res) => {
     try {
         const { name = "New API Key", description } = req.body;
-        const clerkUserId = req.user.id;
-
-        const user = await prisma.user.findUnique({
-            where: { clerkUserId },
-            include: { memberships: true }
-        });
-
-        if (!user || user.memberships.length === 0) {
-            return res.status(404).json({ success: false, message: "User or organization not found" });
-        }
-
-        const organizationId = user.memberships[0].organizationId;
+        const organizationId = req.organizationId;
+        const dbUser = req.dbUser;
 
         // Generate the raw key
         const rawKey = 'sk_live_' + crypto.randomBytes(24).toString('hex');
@@ -76,7 +60,7 @@ const createApiKey = async (req, res) => {
         const newApiKey = await prisma.apiKey.create({
             data: {
                 organizationId,
-                createdByUserId: user.id,
+                createdByUserId: dbUser.id,
                 name,
                 description,
                 keyPrefix,
@@ -90,6 +74,14 @@ const createApiKey = async (req, res) => {
                 description: true,
                 keyPrefix: true,
                 createdAt: true,
+                createdByUser: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                }
             }
         });
 
@@ -114,25 +106,14 @@ const toggleApiKey = async (req, res) => {
     try {
         const { id } = req.params;
         const { enable } = req.body; // boolean
-        const clerkUserId = req.user.id;
-
-        const user = await prisma.user.findUnique({
-            where: { clerkUserId },
-            include: { memberships: true }
-        });
-
-        if (!user || user.memberships.length === 0) {
-            return res.status(404).json({ success: false, message: "User or organization not found" });
-        }
-
-        const organizationId = user.memberships[0].organizationId;
+        const organizationId = req.organizationId;
 
         const apiKey = await prisma.apiKey.findFirst({
             where: { id, organizationId, deletedAt: null }
         });
 
         if (!apiKey) {
-            return res.status(404).json({ success: false, message: "API Key not found" });
+            return res.status(404).json({ success: false, message: "API Key not found in this organization" });
         }
 
         const updatedKey = await prisma.apiKey.update({
@@ -165,25 +146,14 @@ const toggleApiKey = async (req, res) => {
 const deleteApiKey = async (req, res) => {
     try {
         const { id } = req.params;
-        const clerkUserId = req.user.id;
-
-        const user = await prisma.user.findUnique({
-            where: { clerkUserId },
-            include: { memberships: true }
-        });
-
-        if (!user || user.memberships.length === 0) {
-            return res.status(404).json({ success: false, message: "User or organization not found" });
-        }
-
-        const organizationId = user.memberships[0].organizationId;
+        const organizationId = req.organizationId;
 
         const apiKey = await prisma.apiKey.findFirst({
             where: { id, organizationId, deletedAt: null }
         });
 
         if (!apiKey) {
-            return res.status(404).json({ success: false, message: "API Key not found" });
+            return res.status(404).json({ success: false, message: "API Key not found in this organization" });
         }
 
         // Soft delete
@@ -206,22 +176,11 @@ const deleteApiKey = async (req, res) => {
 const bulkToggleApiKeys = async (req, res) => {
     try {
         const { ids, enable } = req.body;
-        const clerkUserId = req.user.id;
+        const organizationId = req.organizationId;
 
         if (!Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ success: false, message: "No API key IDs provided" });
         }
-
-        const user = await prisma.user.findUnique({
-            where: { clerkUserId },
-            include: { memberships: true }
-        });
-
-        if (!user || user.memberships.length === 0) {
-            return res.status(404).json({ success: false, message: "User or organization not found" });
-        }
-
-        const organizationId = user.memberships[0].organizationId;
 
         await prisma.apiKey.updateMany({
             where: {
@@ -251,22 +210,11 @@ const bulkToggleApiKeys = async (req, res) => {
 const bulkDeleteApiKeys = async (req, res) => {
     try {
         const { ids } = req.body;
-        const clerkUserId = req.user.id;
+        const organizationId = req.organizationId;
 
         if (!Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ success: false, message: "No API key IDs provided" });
         }
-
-        const user = await prisma.user.findUnique({
-            where: { clerkUserId },
-            include: { memberships: true }
-        });
-
-        if (!user || user.memberships.length === 0) {
-            return res.status(404).json({ success: false, message: "User or organization not found" });
-        }
-
-        const organizationId = user.memberships[0].organizationId;
 
         await prisma.apiKey.updateMany({
             where: {

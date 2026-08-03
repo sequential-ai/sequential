@@ -209,91 +209,49 @@ const addOrganizationMember = async (req, res) => {
       }
     });
 
-    // Check if user exists in the system
-    const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail }
-    });
+    // Create or refresh OrganizationInvite as PENDING (even if user already registered)
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    let resultMember;
-
-    if (existingUser) {
-      // User exists in system, add directly as OrganizationMember
-      const newMember = await prisma.organizationMember.create({
-        data: {
-          organizationId: org.id,
-          userId: existingUser.id,
-          role: normalizedRole,
-        },
-        include: { user: true }
-      });
-
-      // If there was an old pending invite, mark it ACCEPTED
-      if (existingInvite) {
-        await prisma.organizationInvite.update({
-          where: { id: existingInvite.id },
-          data: { status: 'ACCEPTED', acceptedAt: new Date() }
-        }).catch(() => {});
-      }
-
-      const fullName = `${existingUser.firstName || ''} ${existingUser.lastName || ''}`.trim();
-      resultMember = {
-        id: newMember.id,
-        userId: newMember.userId,
-        name: fullName || existingUser.email.split('@')[0],
-        email: existingUser.email,
-        role: newMember.role,
-        avatar: existingUser.imageUrl || '',
-        joinedAt: new Date().toISOString().split('T')[0],
-        status: 'ACTIVE',
-        isCurrentUser: existingUser.clerkUserId === clerkUserId,
-        isOwner: newMember.role === 'OWNER',
-        createdAt: newMember.createdAt,
-      };
-    } else {
-      // User does not exist yet -> Create or refresh OrganizationInvite
-      const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-      const invite = await prisma.organizationInvite.upsert({
-        where: {
-          organizationId_email: {
-            organizationId: org.id,
-            email: normalizedEmail,
-          }
-        },
-        update: {
-          role: normalizedRole,
-          token,
-          status: 'PENDING',
-          invitedByUserId: user.id,
-          expiresAt,
-        },
-        create: {
+    const invite = await prisma.organizationInvite.upsert({
+      where: {
+        organizationId_email: {
           organizationId: org.id,
           email: normalizedEmail,
-          role: normalizedRole,
-          token,
-          status: 'PENDING',
-          invitedByUserId: user.id,
-          expiresAt,
         }
-      });
-
-      resultMember = {
-        id: invite.id,
-        inviteId: invite.id,
-        name: normalizedEmail.split('@')[0],
+      },
+      update: {
+        role: normalizedRole,
+        token,
+        status: 'PENDING',
+        invitedByUserId: user.id,
+        expiresAt,
+      },
+      create: {
+        organizationId: org.id,
         email: normalizedEmail,
-        role: invite.role,
-        avatar: '',
-        joinedAt: 'Pending',
-        status: 'INVITED',
-        expiresAt: invite.expiresAt,
-        invitedBy: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
-        isInvite: true,
-        createdAt: invite.createdAt,
-      };
-    }
+        role: normalizedRole,
+        token,
+        status: 'PENDING',
+        invitedByUserId: user.id,
+        expiresAt,
+      }
+    });
+
+    const resultMember = {
+      id: invite.id,
+      inviteId: invite.id,
+      name: normalizedEmail.split('@')[0],
+      email: normalizedEmail,
+      role: invite.role,
+      avatar: '',
+      joinedAt: 'Pending',
+      status: 'INVITED',
+      expiresAt: invite.expiresAt,
+      invitedBy: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      isInvite: true,
+      createdAt: invite.createdAt,
+    };
 
     // Record audit log
     await prisma.auditLog.create({
@@ -301,18 +259,17 @@ const addOrganizationMember = async (req, res) => {
         organizationId: org.id,
         actorUserId: user.id,
         category: 'MEMBER',
-        action: existingUser ? 'member.added' : 'member.invited',
+        action: 'member.invited',
         metadata: {
           email: normalizedEmail,
           role: normalizedRole,
-          addedDirectly: !!existingUser,
         }
       }
-    }).catch(e => console.warn('AuditLog creation notice:', e.message));
+    });
 
     res.status(201).json({
       success: true,
-      message: existingUser ? 'Colleague added to workspace' : 'Invitation sent successfully',
+      message: `Invitation sent to ${normalizedEmail}`,
       data: resultMember
     });
   } catch (error) {

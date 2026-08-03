@@ -87,7 +87,7 @@ function ApiKeysFallback() {
 
 export default function ApiKeys() {
   const { user } = useUser()
-  const { dbUser, refreshProfile, isSyncing } = useAuth()
+  const { dbUser, refreshProfile, isSyncing, activeOrgId, org } = useAuth()
   const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || 'yashtupkar6@gmail.com'
 
   const [showKeyIds, setShowKeyIds] = useState(false)
@@ -116,7 +116,7 @@ export default function ApiKeys() {
   // Single Revoke Key Confirmation State
   const [keyToRevoke, setKeyToRevoke] = useState(null)
 
-  // Fetch API keys from backend on mount or when user changes
+  // Fetch API keys from backend on mount or when activeOrgId changes
   useEffect(() => {
     let isMounted = true
 
@@ -125,17 +125,23 @@ export default function ApiKeys() {
         setIsLoading(true)
         const res = await api.getApiKeys()
         if (isMounted && res.data?.success && Array.isArray(res.data.data)) {
-          const mapped = res.data.data.map((k) => ({
-            id: k.id,
-            name: k.name || 'API Key',
-            description: k.description || '',
-            maskedValue: k.keyPrefix ? `${k.keyPrefix}...` : 'sk_live_****',
-            fullSecret: k.keyPrefix ? `${k.keyPrefix}••••••••••••••••` : 'sk_live_secret',
-            createdBy: userEmail,
-            createdAt: k.createdAt ? new Date(k.createdAt).toLocaleDateString('en-US') : 'Recent',
-            revokedAt: k.revokedAt || null,
-            role: 'Full Access',
-          }))
+          const mapped = res.data.data.map((k) => {
+            const creatorName = k.createdByUser
+              ? (k.createdByUser.firstName ? `${k.createdByUser.firstName} ${k.createdByUser.lastName || ''}`.trim() : k.createdByUser.email)
+              : (userEmail || 'Team Member')
+
+            return {
+              id: k.id,
+              name: k.name || 'API Key',
+              description: k.description || '',
+              maskedValue: k.keyPrefix ? `${k.keyPrefix}...` : 'sk_live_****',
+              fullSecret: k.keyPrefix ? `${k.keyPrefix}••••••••••••••••` : 'sk_live_secret',
+              createdBy: creatorName,
+              createdAt: k.createdAt ? new Date(k.createdAt).toLocaleDateString('en-US') : 'Recent',
+              revokedAt: k.revokedAt || null,
+              role: 'Full Access',
+            }
+          })
           setApiKeys(mapped)
         } else if (isMounted) {
           setApiKeys([])
@@ -153,7 +159,7 @@ export default function ApiKeys() {
     return () => {
       isMounted = false
     }
-  }, [userEmail])
+  }, [userEmail, activeOrgId])
 
   // Clean up selectedKeyIds if any selected keys are deleted or not in list
   const validSelectedIds = selectedKeyIds.filter((id) => apiKeys.some((k) => k.id === id))

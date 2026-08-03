@@ -1,5 +1,5 @@
 import React from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, Navigate } from 'react-router-dom'
 import { Skeleton } from 'boneyard-js/react'
 import { useAuth } from '@/context/AuthContext'
 import SequentialAppSidebar from '@/components/shadcn-space/blocks/dashboard-shell-01/app-sidebar'
@@ -24,9 +24,14 @@ function DashboardLayoutFallback() {
 }
 
 export default function DashboardLayout() {
-  const { isSyncing } = useAuth()
+  const { isSyncing, hasCompletedOnboarding } = useAuth()
   const location = useLocation()
   const isPlayground = location.pathname.startsWith('/dashboard/playground')
+
+  // Automatically enforce onboarding for newly registered / non-onboarded users
+  if (!isSyncing && hasCompletedOnboarding === false) {
+    return <Navigate to="/onboard" replace />
+  }
 
   return (
     <SequentialAppSidebar>

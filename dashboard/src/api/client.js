@@ -5,11 +5,15 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Attach Bearer token from localStorage if present
+// Attach Bearer token and active Organization ID from localStorage if present
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('seq-token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  const activeOrgId = localStorage.getItem('seq_active_org_id')
+  if (activeOrgId) {
+    config.headers['x-organization-id'] = activeOrgId
   }
   return config
 })
@@ -20,6 +24,9 @@ export const api = {
   register: (payload) => client.post('/auth/register', payload),
   getProfile: () => client.get('/auth/me'),
   createOrganization: (payload) => client.post('/auth/organization', payload),
+  getPendingInvites: () => client.get('/auth/invites/pending'),
+  acceptInvite: (inviteId) => client.post(`/auth/invites/${inviteId}/accept`),
+  declineInvite: (inviteId) => client.post(`/auth/invites/${inviteId}/decline`),
 
   // API Keys
   getApiKeys: () => client.get('/apikeys'),

@@ -7,14 +7,20 @@ const AuthContext = createContext({
   org: null,
   activeOrgId: null,
   memberships: [],
+  pendingInvites: [],
+  hasCompletedOnboarding: false,
   credits: 0,
   sub: null,
   apiKeys: [],
   syncStatus: 'idle',
   isSyncing: true,
+  isSwitchingOrg: false,
   refreshProfile: async () => {},
-  switchOrganization: (orgId) => {},
+  switchOrganization: async (orgId) => {},
   createOrganization: async (payload) => {},
+  acceptInvite: async (inviteId) => {},
+  declineInvite: async (inviteId) => {},
+  completeOnboarding: () => {},
 })
 
 export function AuthProvider({ children }) {
@@ -23,6 +29,7 @@ export function AuthProvider({ children }) {
   const [activeOrgId, setActiveOrgId] = useState(() => localStorage.getItem('seq_active_org_id'))
   const [syncStatus, setSyncStatus] = useState('Checking database...')
   const [isSyncing, setIsSyncing] = useState(true)
+  const [isSwitchingOrg, setIsSwitchingOrg] = useState(false)
 
   const syncWithDatabase = useCallback(async () => {
     if (!isLoaded || !isSignedIn || !user) {
@@ -94,12 +101,25 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const switchOrganization = (orgId) => {
-    setActiveOrgId(orgId)
-    if (orgId) {
+  const switchOrganization = async (orgId) => {
+    if (!orgId || orgId === activeOrgId) return
+    try {
+      setIsSwitchingOrg(true)
+      setActiveOrgId(orgId)
       localStorage.setItem('seq_active_org_id', orgId)
-    } else {
-      localStorage.removeItem('seq_active_org_id')
+      // Small graceful pause so user perceives switching state clearly, then refresh
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      await refreshProfile()
+    } catch (err) {
+      console.warn('Organization switch error:', err)
+    } finally {
+      setIsSwitchingOrg(false)
+    }
+  }
+
+  const completeOnboarding = () => {
+    if (user?.id) {
+      localStorage.setItem(`seq_onboarded_${user.id}`, 'true')
     }
   }
 
@@ -116,6 +136,7 @@ export function AuthProvider({ children }) {
         if (createdOrg?.id) {
           switchOrganization(createdOrg.id)
         }
+        completeOnboarding()
         return { success: true, organization: createdOrg }
       }
       return { success: false, message: res.data?.message || 'Failed to create organization' }
@@ -125,15 +146,69 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const acceptInvite = async (inviteId) => {
+    try {
+      const res = await api.acceptInvite(inviteId)
+      if (res.data?.success) {
+        const joinedOrg = res.data.data?.organization
+        if (res.data.data?.user) {
+          setDbUser(res.data.data.user)
+        } else {
+          await refreshProfile()
+        }
+        if (joinedOrg?.id) {
+          switchOrganization(joinedOrg.id)
+        }
+        completeOnboarding()
+        return { success: true, message: res.data?.message, organization: joinedOrg }
+      }
+      return { success: false, message: res.data?.message || 'Failed to join organization' }
+    } catch (err) {
+      console.error('Accept invite error:', err)
+      return { success: false, message: err.response?.data?.message || err.message }
+    }
+  }
+
+  const declineInvite = async (inviteId) => {
+    try {
+      const res = await api.declineInvite(inviteId)
+      if (res.data?.success) {
+        if (res.data.data?.pendingInvites && dbUser) {
+          setDbUser({ ...dbUser, pendingInvites: res.data.data.pendingInvites })
+        } else {
+          await refreshProfile()
+        }
+        return { success: true }
+      }
+      return { success: false, message: res.data?.message || 'Failed to decline invite' }
+    } catch (err) {
+      console.error('Decline invite error:', err)
+      return { success: false, message: err.response?.data?.message || err.message }
+    }
+  }
+
   // Derive active workspace data
   const memberships = dbUser?.memberships || []
+  const pendingInvites = dbUser?.pendingInvites || []
+
+  // Check onboarding status
+  const hasOnboardedFlag = user?.id ? localStorage.getItem(`seq_onboarded_${user.id}`) === 'true' : false
+  const hasJoinedOrg = memberships.length > 0
+  const hasCompletedOnboarding = hasOnboardedFlag || hasJoinedOrg
   
-  // Find active membership based on activeOrgId or fallback to the first membership
+  // Find active membership based on activeOrgId or fallback to the first/latest membership
   const activeMembership = (activeOrgId ? memberships.find(m => m.organizationId === activeOrgId || m.organization?.id === activeOrgId) : null) || memberships[0] || null
   const org = activeMembership?.organization || null
   const sub = org?.subscription || null
-  const apiKeys = org?.apiKeys || []
   const credits = org?.creditLedger?.reduce((acc, curr) => acc + (curr.amount || 0), 0) ?? 3160
+
+  // Auto-repair activeOrgId if invalid, stale, or missing
+  useEffect(() => {
+    if (org?.id && org.id !== activeOrgId) {
+      setActiveOrgId(org.id)
+      localStorage.setItem('seq_active_org_id', org.id)
+    }
+  }, [org?.id, activeOrgId])
 
   return (
     <AuthContext.Provider
@@ -142,14 +217,19 @@ export function AuthProvider({ children }) {
         org,
         activeOrgId: org?.id || null,
         memberships,
+        pendingInvites,
+        hasCompletedOnboarding,
         credits,
         sub,
-        apiKeys,
         syncStatus,
         isSyncing,
+        isSwitchingOrg,
         refreshProfile,
         switchOrganization,
         createOrganization,
+        acceptInvite,
+        declineInvite,
+        completeOnboarding,
       }}
     >
       {children}
@@ -158,3 +238,4 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext)
+

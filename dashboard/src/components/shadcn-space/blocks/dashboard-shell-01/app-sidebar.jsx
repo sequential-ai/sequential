@@ -15,17 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SiteHeader } from "@/components/shadcn-space/blocks/dashboard-shell-01/site-header";
 import { NavMain } from "@/components/shadcn-space/blocks/dashboard-shell-01/nav-main";
 import SimpleBar from "simplebar-react";
@@ -62,12 +51,40 @@ import {
   KeyRound,
   ListTodo,
   Webhook,
+  Building2,
+  Loader2,
+  X,
+  UserPlus,
 } from "lucide-react";
 import { FlaskConicalIcon } from "lucide-react";
 import { LucideGitGraph } from "lucide-react";
 import { ChartNoAxesColumn } from "lucide-react";
 import { ChartNoAxesCombined } from "lucide-react";
 import { Database } from "lucide-react";
+
+// Deterministic multi-color gradients for organization avatars (Linear/Vercel style)
+const ORG_GRADIENTS = [
+  "from-violet-500 via-purple-500 to-indigo-600",
+  "from-blue-500 via-cyan-500 to-teal-500",
+  "from-emerald-500 via-teal-500 to-cyan-600",
+  "from-amber-500 via-orange-500 to-rose-500",
+  "from-rose-500 via-pink-500 to-purple-600",
+  "from-fuchsia-500 via-pink-500 to-rose-500",
+  "from-indigo-500 via-blue-600 to-cyan-500",
+  "from-teal-400 via-emerald-500 to-green-600",
+  "from-orange-500 via-rose-500 to-red-600",
+  "from-violet-600 via-indigo-600 to-blue-700",
+];
+
+const getOrgGradient = (name = "") => {
+  if (!name) return ORG_GRADIENTS[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % ORG_GRADIENTS.length;
+  return ORG_GRADIENTS[index];
+};
 
 export const sidebarSections = [
   {
@@ -109,7 +126,18 @@ export const sidebarSections = [
 ];
 
 const SequentialAppSidebar = ({ children }) => {
-  const { org, credits, refreshProfile, dbUser, memberships, switchOrganization } = useAuth();
+  const {
+    org,
+    credits,
+    refreshProfile,
+    dbUser,
+    memberships,
+    switchOrganization,
+    isSwitchingOrg,
+    pendingInvites,
+    acceptInvite,
+    declineInvite,
+  } = useAuth();
   const { user } = useUser();
   const { signOut } = useClerk();
   const { theme, setTheme } = useTheme();
@@ -117,9 +145,11 @@ const SequentialAppSidebar = ({ children }) => {
   const location = useLocation();
   const isPlayground = location.pathname.startsWith("/dashboard/playground");
 
-  // Create Org state
-  const [isCreateOrgOpen, setIsCreateOrgOpen] = useState(false);
-  const [newOrgName, setNewOrgName] = useState("");
+  // Switching organization loading state
+  const [switchingOrgId, setSwitchingOrgId] = useState(null);
+
+  // Invite action loading states
+  const [actioningInviteId, setActioningInviteId] = useState(null);
 
   // Balance display
   const balanceDisplay = credits ? `$${(credits / 160).toFixed(2)}` : "$19.93";
@@ -135,9 +165,31 @@ const SequentialAppSidebar = ({ children }) => {
     navigate("/login");
   };
 
-  const handleCreateOrg = (e) => {
-    e.preventDefault();
-    navigate("/onboard");
+  const handleAcceptInvite = async (e, inviteId) => {
+    e.stopPropagation();
+    try {
+      setActioningInviteId(inviteId);
+      const res = await acceptInvite(inviteId);
+      if (res?.membership?.organizationId) {
+        await switchOrganization(res.membership.organizationId);
+      }
+    } catch (err) {
+      console.error("Failed to accept invite:", err);
+    } finally {
+      setActioningInviteId(null);
+    }
+  };
+
+  const handleDeclineInvite = async (e, inviteId) => {
+    e.stopPropagation();
+    try {
+      setActioningInviteId(inviteId);
+      await declineInvite(inviteId);
+    } catch (err) {
+      console.error("Failed to decline invite:", err);
+    } finally {
+      setActioningInviteId(null);
+    }
   };
 
   return (
@@ -147,72 +199,75 @@ const SequentialAppSidebar = ({ children }) => {
           {/* Top Header & Navigation */}
           <div className="flex flex-col gap-2">
             {/* Header: Brand Logo & Organization Dropdown */}
-            <SidebarHeader className="py-1 px-3 space-y-2.5">
-              {/* Sequential Brand Logo on Top */}
-              {/* <div className="px-1 pt-1 flex items-center justify-between">
-                <Link to="/dashboard" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-                  <span className="font-bold text-base tracking-tight text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
-                    Sequential
-                  </span>
-                </Link>
-              </div> */}
-
+            <SidebarHeader className="py-2 px-3">
               {/* Organization Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
                     className="
-                      group flex w-full items-center gap-2.5
-                      rounded-lg border border-transparent
-                      bg-black/[0.035] dark:bg-white/[0.05]
+                      group relative flex w-full items-center gap-2.5
+                      rounded-lg border border-sidebar-border/70
+                      bg-sidebar-accent hover:bg-sidebar-accent/70
                       px-2.5 py-2
                       text-left outline-none
                       transition-all duration-150
-                      hover:bg-black/[0.06] dark:hover:bg-white/[0.08]
-                      data-[state=open]:bg-black/[0.06]
-                      dark:data-[state=open]:bg-white/[0.08]
+                      hover:border-sidebar-border
+                      data-[state=open]:bg-sidebar-accent/70
+                      data-[state=open]:border-sidebar-border
                     "
                   >
-                    {/* Organization avatar */}
+                    {/* Organization gradient avatar */}
                     <div
-                      className="
-                        flex h-8 w-8 shrink-0 items-center justify-center
-                        rounded-md bg-primary
-                        text-[12px] font-semibold text-white
-                        shadow-xs
-                      "
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white text-[12px] font-semibold shadow-xs border border-white/15 transition-transform group-hover:scale-105",
+                        getOrgGradient(orgName)
+                      )}
                     >
                       {orgName?.charAt(0)?.toUpperCase() || "S"}
                     </div>
 
                     {/* Organization information */}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold leading-5 text-foreground">
+                      <div className="truncate text-xs font-semibold leading-tight text-sidebar-foreground">
                         {orgName}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] leading-none text-muted-foreground">
-                          Workspace
-                        </span>
-
-                        <span className="h-0.5 w-0.5 rounded-full bg-muted-foreground/50" />
-
-                        <span className="text-[10px] font-medium leading-none text-primary">
-                          Admin
-                        </span>
-                      </div>
+                      {isSwitchingOrg ? (
+                        <div className="mt-0.5 flex items-center gap-1 text-[10px] font-medium leading-none text-muted-foreground animate-pulse">
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          <span>Switching...</span>
+                        </div>
+                      ) : (
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground leading-none">
+                          <span className="capitalize">
+                            {memberships?.find(m => m.organization?.id === org?.id)?.role?.toLowerCase() || "Admin"}
+                          </span>
+                          <span className="h-0.5 w-0.5 rounded-full bg-muted-foreground/40" />
+                          <span>Workspace</span>
+                        </div>
+                      )}
                     </div>
 
-                    <ChevronsUpDown
-                      className="
-                        h-3.5 w-3.5 shrink-0
-                        text-muted-foreground/60
-                        transition-colors
-                        group-hover:text-foreground/70
-                      "
-                    />
+                    {/* Pending Invites notification pill */}
+                    {pendingInvites && pendingInvites.length > 0 && !isSwitchingOrg && (
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white shadow-xs">
+                        {pendingInvites.length}
+                      </span>
+                    )}
+
+                    {isSwitchingOrg ? (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                    ) : (
+                      <ChevronsUpDown
+                        className="
+                          h-3.5 w-3.5 shrink-0
+                          text-muted-foreground/60
+                          transition-colors
+                          group-hover:text-foreground/80
+                        "
+                      />
+                    )}
                   </button>
                 </DropdownMenuTrigger>
 
@@ -221,175 +276,220 @@ const SequentialAppSidebar = ({ children }) => {
                   side="bottom"
                   sideOffset={6}
                   className="
-                    w-[280px]
+                    w-[300px]
                     rounded-xl
-                    border border-border
+                    border border-border/80
                     bg-popover
                     p-1.5
                     text-popover-foreground
-                    shadow-lg
+                    shadow-xl
                   "
                 >
-                  {/* Label */}
-                  <div className="px-2.5 pb-1.5 pt-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {/* Header Label */}
+                  <div className="px-2.5 pb-1.5 pt-1 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-muted-foreground">
                       Workspaces
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/80">
+                      {memberships?.length || 1} active
                     </span>
                   </div>
 
-                  {/* Organizations */}
-                  {memberships && memberships.length > 0 ? (
-                    memberships.map((m) => {
-                      const mOrg = m.organization;
-                      const currentOrgName = mOrg?.name || "Workspace";
-                      const isActive = mOrg?.id === org?.id;
+                  {/* Organizations list */}
+                  <div className="space-y-0.5">
+                    {memberships && memberships.length > 0 ? (
+                      memberships.map((m) => {
+                        const mOrg = m.organization;
+                        const currentOrgName = mOrg?.name || "Workspace";
+                        const isActive = mOrg?.id === org?.id;
+                        const isThisItemSwitching = switchingOrgId === mOrg?.id || (isSwitchingOrg && isActive);
 
-                      const role =
-                        m.role === "OWNER" || m.role === "ADMIN"
-                          ? "Admin"
-                          : m.role;
+                        const role =
+                          m.role === "OWNER" || m.role === "ADMIN"
+                            ? "Admin"
+                            : m.role;
 
-                      return (
-                        <DropdownMenuItem
-                          key={m.id || mOrg?.id}
-                          onClick={() => {
-                            if (mOrg?.id && !isActive) {
-                              switchOrganization(mOrg.id);
-                            }
-                          }}
-                          className="
-                            group/item
-                            flex cursor-pointer items-center gap-2.5
-                            rounded-lg
-                            px-2.5 py-2
-                            outline-none
-                            focus:bg-muted
-                          "
-                        >
-                          {/* Organization avatar */}
-                          <div
-                            className="
-                              flex h-8 w-8 shrink-0 items-center justify-center
-                              rounded-md bg-primary
-                              text-[11px] font-semibold text-white
-                              shadow-xs
-                            "
+                        return (
+                          <DropdownMenuItem
+                            key={m.id || mOrg?.id}
+                            disabled={isSwitchingOrg}
+                            onClick={async () => {
+                              if (mOrg?.id && !isActive && !isSwitchingOrg) {
+                                try {
+                                  setSwitchingOrgId(mOrg.id);
+                                  await switchOrganization(mOrg.id);
+                                } finally {
+                                  setSwitchingOrgId(null);
+                                }
+                              }
+                            }}
+                            className={cn(
+                              "group/item flex h-[52px] cursor-pointer items-center gap-2.5 rounded-lg px-2.5 outline-none hover:bg-muted/70 focus:bg-muted/70 transition-colors",
+                              isActive && "bg-muted/40",
+                              isSwitchingOrg && !isThisItemSwitching && "opacity-50 pointer-events-none"
+                            )}
                           >
-                            {currentOrgName.charAt(0).toUpperCase()}
-                          </div>
-
-                          {/* Info */}
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[12px] font-medium text-foreground">
-                              {currentOrgName}
-                            </div>
-
-                            <div className="mt-0.5 flex items-center gap-1.5">
-                              <span className="text-[10px] text-muted-foreground">
-                                {role}
-                              </span>
-
-                              {isActive && (
-                                <>
-                                  <span className="h-0.5 w-0.5 rounded-full bg-muted-foreground/50" />
-
-                                  <span className="text-[10px] font-medium text-primary">
-                                    Current
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          {isActive && (
+                            {/* Organization deterministic gradient avatar */}
                             <div
-                              className="
-                                flex h-5 w-5 shrink-0 items-center justify-center
-                                rounded-full bg-primary/10
-                              "
+                              className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white text-[12px] font-semibold shadow-xs border border-white/10 transition-transform group-hover/item:scale-105",
+                                getOrgGradient(currentOrgName)
+                              )}
                             >
-                              <Check className="h-3 w-3 text-primary" />
+                              {currentOrgName.charAt(0).toUpperCase()}
                             </div>
-                          )}
-                        </DropdownMenuItem>
-                      );
-                    })
-                  ) : (
-                    <DropdownMenuItem
-                      onClick={() => navigate("/dashboard/settings")}
-                      className="
-                        flex cursor-pointer items-center gap-2.5
-                        rounded-lg px-2.5 py-2
-                        focus:bg-muted
-                      "
-                    >
-                      <div
-                        className="
-                          flex h-8 w-8 shrink-0 items-center justify-center
-                          rounded-md bg-primary
-                          text-[11px] font-semibold text-white
-                          shadow-xs
-                        "
+
+                            {/* Info */}
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-xs font-medium text-foreground">
+                                {currentOrgName}
+                              </div>
+
+                              <div className="mt-0.5 text-[11px] text-muted-foreground capitalize">
+                                {role?.toLowerCase()}
+                              </div>
+                            </div>
+
+                            {/* Subtle checkmark or switching loader */}
+                            {isThisItemSwitching ? (
+                              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+                            ) : isActive ? (
+                              <Check className="h-4 w-4 shrink-0 text-foreground" />
+                            ) : null}
+                          </DropdownMenuItem>
+                        );
+                      })
+                    ) : (
+                      <DropdownMenuItem
+                        onClick={() => navigate("/dashboard/settings")}
+                        className="flex h-[52px] cursor-pointer items-center gap-2.5 rounded-lg px-2.5 hover:bg-muted/70 focus:bg-muted/70 transition-colors"
                       >
-                        {orgName?.charAt(0)?.toUpperCase() || "S"}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[12px] font-medium text-foreground">
-                          {orgName}
+                        <div
+                          className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white text-[12px] font-semibold shadow-xs border border-white/10",
+                            getOrgGradient(orgName)
+                          )}
+                        >
+                          {orgName?.charAt(0)?.toUpperCase() || "S"}
                         </div>
 
-                        <div className="mt-0.5 flex items-center gap-1.5">
-                          <span className="text-[10px] text-muted-foreground">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-medium text-foreground">
+                            {orgName}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
                             Admin
-                          </span>
-
-                          <span className="h-0.5 w-0.5 rounded-full bg-muted-foreground/50" />
-
-                          <span className="text-[10px] font-medium text-primary">
-                            Current
-                          </span>
+                          </div>
                         </div>
+
+                        <Check className="h-4 w-4 shrink-0 text-foreground" />
+                      </DropdownMenuItem>
+                    )}
+                  </div>
+
+                  {/* Invited Workspaces Section */}
+                  {pendingInvites && pendingInvites.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator className="my-1.5 bg-border/60" />
+                      <div className="px-2.5 pb-1 pt-1 flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                          Invited Workspaces
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {pendingInvites.length} pending
+                        </span>
                       </div>
 
-                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
-                        <Check className="h-3 w-3 text-primary" />
+                      <div className="space-y-1.5 my-1">
+                        {pendingInvites.map((inv) => {
+                          const invName = inv.organization?.name || "Workspace";
+                          return (
+                            <div
+                              key={inv.id}
+                              className="group/inv flex flex-col gap-2 rounded-lg border border-border/70 bg-muted/40 p-2.5 transition-colors hover:bg-muted/60"
+                            >
+                              {/* Top Row: Avatar + Name & Role */}
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={cn(
+                                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-[11px] font-semibold text-white shadow-xs border border-white/10",
+                                    getOrgGradient(invName)
+                                  )}
+                                >
+                                  {invName.charAt(0).toUpperCase()}
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-xs font-medium text-foreground">
+                                    {invName}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground truncate capitalize">
+                                    {inv.role?.toLowerCase() || 'member'}{inv.inviter?.firstName ? ` · by ${inv.inviter.firstName}` : ''}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Bottom Row: Accept & Decline Actions */}
+                              <div className="flex items-center gap-2 pt-0.5">
+                                <button
+                                  type="button"
+                                  disabled={actioningInviteId === inv.id}
+                                  onClick={(e) => handleAcceptInvite(e, inv.id)}
+                                  className=" flex py-1 px-3 items-center justify-center gap-1.5 rounded bg-green-600 cursor-pointer hover:bg-primary/90 text-white text-[11px] font-medium transition-colors disabled:opacity-50 shadow-xs"
+                                >
+                                  {actioningInviteId === inv.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <>
+                                    
+                                      Accept
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={actioningInviteId === inv.id}
+                                  onClick={(e) => handleDeclineInvite(e, inv.id)}
+                                  className="flex h-7 items-center cursor-pointer justify-center rounded border border-border/80 bg-background/80 hover:bg-background text-muted-foreground hover:text-destructive px-2.5 text-[11px] font-medium transition-colors disabled:opacity-50 shadow-2xs"
+                                >
+                                  Decline
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </DropdownMenuItem>
+                    </>
                   )}
 
-                  <DropdownMenuSeparator className="my-1 bg-border" />
+                  <DropdownMenuSeparator className="my-1.5 bg-border/60" />
 
                   {/* Create organization */}
                   <DropdownMenuItem
                     onClick={() => navigate("/onboard")}
                     className="
                       group/create
-                      flex cursor-pointer items-center gap-2.5
-                      rounded-lg px-2.5 py-2
-                      focus:bg-muted
+                      flex h-10 cursor-pointer items-center gap-2.5
+                      rounded-lg px-2.5
+                      hover:bg-muted/80 focus:bg-muted/80 transition-colors
                     "
                   >
                     <div
                       className="
-                        flex h-8 w-8 shrink-0 items-center justify-center
+                        flex h-6 w-6 shrink-0 items-center justify-center
                         rounded-md border border-dashed border-border
-                        bg-background
+                        bg-background text-muted-foreground
                         transition-colors
-                        group-hover/create:border-primary/30
-                        group-hover/create:bg-primary/5
+                        group-hover/create:border-foreground/40
+                        group-hover/create:text-foreground
                       "
                     >
-                      <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover/create:text-primary" />
+                      <Plus className="h-3.5 w-3.5" />
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-medium text-foreground">
+                      <div className="text-xs font-medium text-foreground">
                         Create organization
-                      </div>
-
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">
-                        Collaborate in a shared workspace
                       </div>
                     </div>
                   </DropdownMenuItem>
@@ -613,55 +713,6 @@ const SequentialAppSidebar = ({ children }) => {
           </SidebarFooter>
         </div>
       </Sidebar>
-
-      {/* Create Organization Dialog */}
-      <Dialog open={isCreateOrgOpen} onOpenChange={setIsCreateOrgOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl p-5">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold">Create New Organization</DialogTitle>
-            <DialogDescription className="text-xs">
-              Create a shared workspace to collaborate on research pipelines with your team.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleCreateOrg} className="space-y-3.5 mt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="org-name" className="text-xs font-semibold">
-                Organization Name
-              </Label>
-              <Input
-                id="org-name"
-                placeholder="e.g. Acme Research Labs"
-                value={newOrgName}
-                onChange={(e) => setNewOrgName(e.target.value)}
-                className="rounded-lg h-8 text-xs"
-                required
-              />
-            </div>
-
-            <DialogFooter className="mt-4">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreateOrgOpen(false)}
-                className="rounded text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!newOrgName.trim()}
-                className="rounded text-xs text-white font-medium shadow-xs"
-                style={{ background: "var(--primary)" }}
-              >
-                Create Workspace
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* Main Content Inset */}
       <SidebarInset className={cn(
