@@ -152,13 +152,13 @@ const SequentialAppSidebar = ({ children }) => {
   const [actioningInviteId, setActioningInviteId] = useState(null);
 
   // Balance display
-  const balanceDisplay = credits ? `$${(credits / 160).toFixed(2)}` : "$19.93";
+  const balanceDisplay = credits ? `$${(credits / 160).toFixed(2)}` : "$0.00";
 
   // User details
-  const userName = user?.fullName || (dbUser?.firstName ? `${dbUser?.firstName} ${dbUser?.lastName || ''}`.trim() : "YASH Tupkar");
-  const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || "yashtupkar6@gmail.com";
-  const userImage = user?.imageUrl || dbUser?.imageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80";
-  const orgName = org?.name || "Gmail";
+  const userName = user?.fullName || (dbUser?.firstName ? `${dbUser?.firstName} ${dbUser?.lastName || ''}`.trim() : "User");
+  const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || "";
+  const userImage = user?.imageUrl || dbUser?.imageUrl || "";
+  const orgName = org?.name || "Workspace";
 
   const handleSignOut = async () => {
     await signOut();

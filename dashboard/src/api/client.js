@@ -44,12 +44,15 @@ export const api = {
     headers: apiKey ? { 'x-api-key': apiKey } : {}
   }),
 
-  // Organization & Team Members
+  // Organization & Settings
   getMembers: (orgId = 'active') => client.get(`/organizations/${orgId}/members`),
   addMember: (orgId = 'active', payload) => client.post(`/organizations/${orgId}/members`, payload),
   updateMemberRole: (orgId = 'active', memberId, role) => client.patch(`/organizations/${orgId}/members/${memberId}`, { role }),
   removeMember: (orgId = 'active', memberId) => client.delete(`/organizations/${orgId}/members/${memberId}`),
   cancelInvite: (orgId = 'active', inviteId) => client.delete(`/organizations/${orgId}/invites/${inviteId}`),
+  getOrganizationSettings: (orgId = 'active') => client.get(`/organizations/${orgId}/settings`),
+  updateOrganizationSettings: (orgId = 'active', payload) => client.patch(`/organizations/${orgId}/settings`, payload),
+  deleteOrganization: (orgId = 'active') => client.delete(`/organizations/${orgId}`),
 }
 
 export default client

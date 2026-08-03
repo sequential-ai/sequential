@@ -88,7 +88,7 @@ function ApiKeysFallback() {
 export default function ApiKeys() {
   const { user } = useUser()
   const { dbUser, refreshProfile, isSyncing, activeOrgId, org } = useAuth()
-  const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || 'yashtupkar6@gmail.com'
+  const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || ''
 
   const [showKeyIds, setShowKeyIds] = useState(false)
   const [isLoading, setIsLoading] = useState(false)

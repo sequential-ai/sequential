@@ -8,7 +8,7 @@ const prisma = require("../db/db-connection");
  * - req.dbUser (database User object)
  * - req.organizationId (target organization ID)
  * - req.organization (target Organization object)
- * - req.userRole (user's role in this organization: OWNER, ADMIN, DEVELOPER, etc.)
+ * - req.userRole (user's role in this organization: ADMIN or MEMBER)
  * - req.membership (the OrganizationMember record)
  */
 const requireTenant = async (req, res, next) => {

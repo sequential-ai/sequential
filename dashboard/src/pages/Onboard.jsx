@@ -55,18 +55,12 @@ const getOrgGradient = (name = "") => {
 // Roles according to the Sequential Organization Schema
 const SCHEMA_ROLES = [
   { value: 'ADMIN', label: 'Admin', desc: 'Full workspace, member, and API governance' },
-  { value: 'DEVELOPER', label: 'Developer', desc: 'Trigger research tasks & manage API keys' },
-  { value: 'ANALYST', label: 'Analyst', desc: 'Read-only telemetry & synthesis reports' },
-  { value: 'BILLING', label: 'Billing', desc: 'Manage subscriptions, plans, and invoices' },
-  { value: 'VIEWER', label: 'Viewer', desc: 'Basic read-only access to shared reports' },
+  { value: 'MEMBER', label: 'Member', desc: 'Trigger research pipelines & inspect telemetry' },
 ]
 
 const ROLE_LABELS = {
   ADMIN: 'Admin',
-  DEVELOPER: 'Developer',
-  ANALYST: 'Analyst',
-  BILLING: 'Billing',
-  VIEWER: 'Viewer',
+  MEMBER: 'Member',
 }
 
 // Sequential Brand Logo with Glyphs
@@ -160,6 +154,9 @@ export default function Onboard() {
   } = useAuth()
   const { theme, toggle: toggleTheme } = useTheme()
 
+  const hasPendingInvites = Array.isArray(pendingInvites) && pendingInvites.length > 0
+  const hasExistingOrgs = Array.isArray(memberships) && memberships.length > 0
+
   const initialStepParam = searchParams.get('step')
   const [step, setStep] = useState(() => {
     if (initialStepParam === 'create' || initialStepParam === '1') return 1
@@ -168,7 +165,7 @@ export default function Onboard() {
 
   const [orgName, setOrgName] = useState('')
   const [emailInput, setEmailInput] = useState('')
-  const [selectedRole, setSelectedRole] = useState('DEVELOPER')
+  const [selectedRole, setSelectedRole] = useState('MEMBER')
   const [invites, setInvites] = useState([])
   const [inviteInputError, setInviteInputError] = useState('')
   const [selectedSurvey, setSelectedSurvey] = useState([])
@@ -339,7 +336,7 @@ export default function Onboard() {
         {step === 0 && (
           <div className="w-full flex flex-col items-center animate-in fade-in duration-200">
             <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight text-center font-display" style={{ fontFamily: 'var(--font-display)' }}>
-              Create or Join an Organization
+              {hasPendingInvites ? 'Pending Invitations' : 'Create or Join an Organization'}
             </h1>
             <p className="text-xs text-muted-foreground text-center mt-1.5 max-w-sm">
               Collaborate on parallel deep research, manage API keys, and share team telemetry
@@ -410,9 +407,8 @@ export default function Onboard() {
                           >
                             {acceptingInviteId === inv.id ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            
-                            ):("")}
-                            <span>Accept </span>
+                            ) : null}
+                            <span>Accept</span>
                           </button>
                         </div>
                       </div>
@@ -453,6 +449,7 @@ export default function Onboard() {
                 </div>
               </>
             )}
+
             {existingOrgs.length === 0 && (!pendingInvites || pendingInvites.length === 0) && (
               <div className="w-full bg-card/60 border border-border/80 rounded-xl p-4 text-center my-3 shadow-2xs">
                 <div className="w-9 h-9 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2">
@@ -464,6 +461,7 @@ export default function Onboard() {
                 </p>
               </div>
             )}
+
             <div className="w-full mt-6 mb-3 flex items-center gap-3">
               <div className="flex-1 h-px bg-border" />
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-1">CREATE NEW</span>

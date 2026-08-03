@@ -54,22 +54,10 @@ import {
 } from 'lucide-react'
 
 const roleStyles = {
-  OWNER:
-    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
-
   ADMIN:
-    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
+    "bg-primary/10 text-primary border-primary/20",
 
-  DEVELOPER:
-    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
-
-  ANALYST:
-    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
-
-  VIEWER:
-    "bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-400 dark:border-white/10",
-
-  BILLING:
+  MEMBER:
     "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
 }
 
@@ -85,12 +73,8 @@ const statusStyles = {
 }
 
 const ROLE_DESCRIPTIONS = {
-  OWNER: 'Full ownership of workspace, billing, memberships, and API governance.',
-  ADMIN: 'Manage members, billing, credit refills, API keys, and workspace settings.',
-  DEVELOPER: 'Trigger parallel research pipelines, create dev tokens, and inspect telemetry.',
-  ANALYST: 'Read-only access to synthesis reports, citations, and execution traces.',
-  VIEWER: 'Basic read-only access to shared reports without execution privileges.',
-  BILLING: 'Manage subscription plans, invoices, and credit purchases.',
+  ADMIN: 'Full access to manage workspace settings, billing, API keys, and team members.',
+  MEMBER: 'Can run parallel research pipelines, view synthesis reports, and inspect telemetry.',
 }
 
 function TeamFallback() {
@@ -142,7 +126,7 @@ export default function Team() {
   // Invite Modal State
   const [isInviteOpen, setIsInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('DEVELOPER')
+  const [inviteRole, setInviteRole] = useState('MEMBER')
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false)
   const [inviteError, setInviteError] = useState('')
 
@@ -199,12 +183,33 @@ export default function Team() {
     e.preventDefault()
     if (!inviteEmail.trim() || isSubmittingInvite) return
 
+    const normalizedEmail = inviteEmail.trim().toLowerCase()
+
     setInviteError('')
+
+    // Client-side pre-check: already an active member?
+    const existingMember = members.find(
+      (m) => m.email?.toLowerCase() === normalizedEmail && !m.isInvite
+    )
+    if (existingMember) {
+      setInviteError(`${normalizedEmail} is already a member of this workspace.`)
+      return
+    }
+
+    // Client-side pre-check: already has a pending invite?
+    const existingInvite = members.find(
+      (m) => m.email?.toLowerCase() === normalizedEmail && m.isInvite
+    )
+    if (existingInvite) {
+      setInviteError(`An invitation has already been sent to ${normalizedEmail}. They haven't accepted it yet.`)
+      return
+    }
+
     setIsSubmittingInvite(true)
 
     try {
       const res = await api.addMember(currentOrgId, {
-        email: inviteEmail.trim().toLowerCase(),
+        email: normalizedEmail,
         role: inviteRole,
       })
 
@@ -212,7 +217,7 @@ export default function Team() {
         showFeedback('success', res.data.message || 'Invitation sent successfully')
         setIsInviteOpen(false)
         setInviteEmail('')
-        setInviteRole('DEVELOPER')
+        setInviteRole('MEMBER')
         await fetchMembers(false)
         refreshProfile?.()
       } else {
@@ -437,11 +442,8 @@ export default function Team() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Roles</SelectItem>
-                <SelectItem value="OWNER">Owner</SelectItem>
                 <SelectItem value="ADMIN">Admin</SelectItem>
-                <SelectItem value="DEVELOPER">Developer</SelectItem>
-                <SelectItem value="ANALYST">Analyst</SelectItem>
-                <SelectItem value="VIEWER">Viewer</SelectItem>
+                <SelectItem value="MEMBER">Member</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -596,63 +598,40 @@ export default function Team() {
 
                         {/* Role column */}
                         <td className="py-3 px-4">
-                          {isOwner ? (
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] font-mono px-2 py-0.5 font-semibold ${
-                                roleStyles[m.role] || roleStyles.OWNER
-                              }`}
-                            >
-                              OWNER
-                            </Badge>
-                          ) : (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1 cursor-pointer focus:outline-hidden"
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 cursor-pointer focus:outline-hidden"
+                              >
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] font-mono px-2 py-0.5 hover:opacity-80 transition-opacity font-medium ${
+                                    roleStyles[m.role] || roleStyles.MEMBER
+                                  }`}
                                 >
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[10px] font-mono px-2 py-0.5 hover:opacity-80 transition-opacity font-medium ${
-                                      roleStyles[m.role] || roleStyles.VIEWER
-                                    }`}
-                                  >
-                                    {m.role}
-                                  </Badge>
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-48 p-1 rounded-xl shadow-lg">
-                                <div className="px-2 py-1 text-[10px] font-mono text-muted-foreground uppercase font-bold">
-                                  Change Role
-                                </div>
-                                <DropdownMenuItem
-                                  onClick={() => handleRoleChange(m.id, 'ADMIN')}
-                                  className="text-xs cursor-pointer"
-                                >
-                                  Admin (Full Billing & Keys)
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleRoleChange(m.id, 'DEVELOPER')}
-                                  className="text-xs cursor-pointer"
-                                >
-                                  Developer (Pipeline Runner)
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleRoleChange(m.id, 'ANALYST')}
-                                  className="text-xs cursor-pointer"
-                                >
-                                  Analyst (Read Only)
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleRoleChange(m.id, 'VIEWER')}
-                                  className="text-xs cursor-pointer"
-                                >
-                                  Viewer
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                                  {m.role === 'ADMIN' ? 'ADMIN' : 'MEMBER'}
+                                </Badge>
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48 p-1 rounded-xl shadow-lg">
+                              <div className="px-2 py-1 text-[10px] font-mono text-muted-foreground uppercase font-bold">
+                                Change Role
+                              </div>
+                              <DropdownMenuItem
+                                onClick={() => handleRoleChange(m.id, 'ADMIN')}
+                                className="text-xs cursor-pointer"
+                              >
+                                Admin (Full Settings & Members)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleRoleChange(m.id, 'MEMBER')}
+                                className="text-xs cursor-pointer"
+                              >
+                                Member (Pipelines & Reports)
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
 
                         {/* Status column */}
@@ -711,7 +690,7 @@ export default function Team() {
                                   )}
                                 </DropdownMenuItem>
 
-                                {!isOwner && (
+                                {!isCurrentUser && (
                                   <>
                                     <DropdownMenuSeparator className="my-1" />
                                     <DropdownMenuItem
@@ -738,44 +717,24 @@ export default function Team() {
       )}
 
       {/* Role Definitions Reference Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <Card className="rounded-xl border-border bg-card shadow-xs p-4">
           <div className="flex items-center gap-2">
-            <Shield className="h-3.5 w-3.5 text-primary" />
+            <Shield className="h-4 w-4 text-primary" />
             <h4 className="text-xs font-bold text-foreground">Admin</h4>
           </div>
           <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
-            Full control over billing subscriptions, credit refills, team members, and all API credentials.
+            Full governance access to workspace settings, member invites, role changes, billing, and API credential management.
           </p>
         </Card>
 
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
+        <Card className="rounded-xl border-border bg-card shadow-xs p-4">
           <div className="flex items-center gap-2">
-            <Shield className="h-3.5 w-3.5 text-cyan-400" />
-            <h4 className="text-xs font-bold text-foreground">Developer</h4>
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <h4 className="text-xs font-bold text-foreground">Member</h4>
           </div>
           <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
-            Trigger parallel research pipelines, create dev API tokens, inspect execution traces and raw specs.
-          </p>
-        </Card>
-
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
-          <div className="flex items-center gap-2">
-            <Shield className="h-3.5 w-3.5 text-amber-400" />
-            <h4 className="text-xs font-bold text-foreground">Analyst</h4>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
-            View completed research reports, verified citations, and token telemetry without modification access.
-          </p>
-        </Card>
-
-        <Card className="rounded-xl border-border bg-card shadow-xs p-3.5">
-          <div className="flex items-center gap-2">
-            <Shield className="h-3.5 w-3.5 text-muted-foreground" />
-            <h4 className="text-xs font-bold text-foreground">Viewer</h4>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
-            Read-only access to shared reports and high-level project outputs without developer tools.
+            Can trigger parallel research pipelines, inspect results, configure personal tokens, and review citations.
           </p>
         </Card>
       </div>
@@ -829,11 +788,8 @@ export default function Team() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ADMIN">Admin (Full Workspace & Billing Access)</SelectItem>
-                  <SelectItem value="DEVELOPER">Developer (Pipeline Runner & API Keys)</SelectItem>
-                  <SelectItem value="ANALYST">Analyst (Read-Only Telemetry & Reports)</SelectItem>
-                  <SelectItem value="VIEWER">Viewer (Basic Read-Only Access)</SelectItem>
-                  <SelectItem value="BILLING">Billing (Subscription & Invoice Manager)</SelectItem>
+                  <SelectItem value="ADMIN">Admin (Full Workspace, Billing & Team Control)</SelectItem>
+                  <SelectItem value="MEMBER">Member (Research Pipelines & Reports)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">

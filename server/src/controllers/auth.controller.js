@@ -11,6 +11,7 @@ const generateToken = (id) => {
 
 const userInclude = {
     memberships: {
+        where: { organization: { deletedAt: null } },
         include: {
             organization: {
                 select: {
@@ -21,6 +22,7 @@ const userInclude = {
                     clerkOrgId: true,
                     metadata: true,
                     createdAt: true,
+                    settings: true,
                     subscription: {
                         include: { plan: true }
                     },
@@ -78,16 +80,16 @@ const getPendingInvitesForEmail = async (email) => {
             organization: inv.organization,
             invitedBy: inv.invitedByUser
                 ? `${inv.invitedByUser.firstName || ''} ${inv.invitedByUser.lastName || ''}`.trim() || inv.invitedByUser.email
-                : 'Team Admin'
+                : null
         }));
     } catch (err) {
-        console.warn('Error fetching pending invites:', err.message);
+        console.error("Get Pending Invites Error:", err);
         return [];
     }
 };
 
 /**
- * @desc    Register a new user (Sync from Clerk to our DB)
+ * @desc    Register a new user in database
  * @route   POST /api/v1/auth/register
  */
 const registerUser = async (req, res) => {
@@ -98,55 +100,57 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "clerkUserId and email are required" });
         }
 
-        // Check if user already exists by clerkUserId or email
-        const existingUser = await prisma.user.findFirst({
-            where: { 
-                OR: [
-                    { clerkUserId },
-                    { email }
-                ]
-            },
+        // Check if user already exists
+        let user = await prisma.user.findUnique({
+            where: { clerkUserId },
             include: userInclude
         });
 
-        if (existingUser) {
-            const pendingInvites = await getPendingInvitesForEmail(existingUser.email);
-            existingUser.pendingInvites = pendingInvites;
-            const token = generateToken(existingUser.clerkUserId);
+        if (user) {
+            const pendingInvites = await getPendingInvitesForEmail(user.email);
+            user.pendingInvites = pendingInvites;
+            const token = generateToken(user.clerkUserId);
             return res.status(200).json({
                 success: true,
                 message: "User already exists",
                 token,
-                data: existingUser
+                data: user
             });
         }
 
-        // Create the User (organization will be created or joined during onboarding)
-        const newUser = await prisma.user.create({
-            data: {
-                clerkUserId,
-                email,
-                firstName,
-                lastName,
-                imageUrl,
-            }
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Transaction to create User and check pending invites
+        const newUser = await prisma.$transaction(async (tx) => {
+            const createdUser = await tx.user.create({
+                data: {
+                    clerkUserId,
+                    email: normalizedEmail,
+                    firstName: firstName || null,
+                    lastName: lastName || null,
+                    imageUrl: imageUrl || null,
+                }
+            });
+
+            return createdUser;
         });
+
+        const pendingInvites = await getPendingInvitesForEmail(newUser.email);
 
         const fullyPopulatedUser = await prisma.user.findUnique({
             where: { id: newUser.id },
             include: userInclude
         });
 
-        const pendingInvites = await getPendingInvitesForEmail(email);
         if (fullyPopulatedUser) {
             fullyPopulatedUser.pendingInvites = pendingInvites;
         }
 
-        const token = generateToken(fullyPopulatedUser.clerkUserId);
+        const token = generateToken(newUser.clerkUserId);
 
         res.status(201).json({
             success: true,
-            message: "User registered successfully. Please proceed with onboarding.",
+            message: "User registered successfully",
             token,
             data: fullyPopulatedUser
         });
@@ -288,16 +292,26 @@ const createOrganization = async (req, res) => {
                 }
             });
 
-            // 2. Add creator as OWNER
+            // 2. Add creator as ADMIN
             await tx.organizationMember.create({
                 data: {
                     organizationId: org.id,
                     userId: user.id,
-                    role: 'OWNER'
+                    role: 'ADMIN'
                 }
             });
 
-            // 3. Free plan & subscription
+            // 3. Create default OrganizationSettings
+            await tx.organizationSettings.create({
+                data: {
+                    organizationId: org.id,
+                    timezone: 'UTC',
+                    theme: 'system',
+                    defaultAiModel: 'deep'
+                }
+            });
+
+            // 4. Free plan & subscription
             const freePlan = await tx.plan.upsert({
                 where: { key: 'free' },
                 update: {},
@@ -325,26 +339,41 @@ const createOrganization = async (req, res) => {
                 }
             });
 
-            // 4. Initial credits
-            await tx.creditLedgerEntry.create({
-                data: {
-                    organizationId: org.id,
-                    amount: 100,
-                    balanceAfter: 100,
-                    type: 'GRANT',
-                    reason: 'Organization Creation Welcome Grant'
+            // 5. Initial credits — only granted on user's very first organization.
+            // We check all orgs where this user has EVER been an ADMIN (including
+            // soft-deleted orgs via deletedAt) to prevent credit farming.
+            const previousAdminOrgs = await tx.organizationMember.count({
+                where: {
+                    userId: user.id,
+                    role: 'ADMIN',
+                    // Exclude the org we just created so we count only prior ones
+                    organizationId: { not: org.id },
                 }
             });
 
-            // 5. If invites provided, create invites
+            const isFirstOrg = previousAdminOrgs === 0;
+
+            if (isFirstOrg) {
+                await tx.creditLedgerEntry.create({
+                    data: {
+                        organizationId: org.id,
+                        amount: 100,
+                        balanceAfter: 100,
+                        type: 'GRANT',
+                        reason: 'Organization Creation Welcome Grant'
+                    }
+                });
+            }
+            // Subsequent orgs start with 0 credits — no ledger entry created.
+
+            // 6. If invites provided, create invites
             if (Array.isArray(invites) && invites.length > 0) {
                 for (const inv of invites) {
                     const email = typeof inv === 'string' ? inv : inv.email;
-                    const role = typeof inv === 'object' && inv.role ? inv.role : 'VIEWER';
+                    const role = typeof inv === 'object' && inv.role ? inv.role : 'MEMBER';
                     if (email && email.trim()) {
-                        const upperRole = String(role || 'VIEWER').toUpperCase().trim();
-                        const validRoles = ['ADMIN', 'DEVELOPER', 'ANALYST', 'BILLING', 'VIEWER'];
-                        const normalizedRole = validRoles.includes(upperRole) ? upperRole : (upperRole === 'MEMBER' ? 'DEVELOPER' : 'VIEWER');
+                        const upperRole = String(role || 'MEMBER').toUpperCase().trim();
+                        const normalizedRole = upperRole === 'ADMIN' ? 'ADMIN' : 'MEMBER';
 
                         await tx.organizationInvite.create({
                             data: {
@@ -436,7 +465,7 @@ const acceptOrganizationInvite = async (req, res) => {
                 data: {
                     organizationId: invite.organizationId,
                     userId: user.id,
-                    role: invite.role || 'DEVELOPER'
+                    role: invite.role === 'ADMIN' ? 'ADMIN' : 'MEMBER'
                 }
             });
         }

@@ -191,7 +191,7 @@ function BillingFallback() {
 
 export default function Billing() {
   const { org, isSyncing } = useAuth()
-  const orgName = org?.name || 'Gmail'
+  const orgName = org?.name || 'Workspace'
 
   // Tab State: 'overview' | 'payment_methods' | 'billing_history'
   const [activeTab, setActiveTab] = useState('overview')
