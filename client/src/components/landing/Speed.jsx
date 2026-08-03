@@ -31,45 +31,72 @@ export default function Speed() {
   const [panelRef, panelInView] = useReveal();
 
   return (
-    <section className="speed-section">
-      <div className="wrap">
-        <div className="speed-head reveal in">
-          <h2>Sequential AI research is faster than single-agent loops.</h2>
-          <p>
+    <section className="py-[100px]">
+      <div className="max-w-[1180px] mx-auto px-8">
+        <div className="max-w-[600px] mb-[34px]">
+          <h2 className="font-display font-bold text-[clamp(26px,3.8vw,38px)] mb-3.5">
+            Sequential AI research is faster than single-agent loops.
+          </h2>
+          <p className="text-ink-soft text-[15.5px]">
             3.5x faster at p50, 4.8x faster at p99. Single-agent loops read sources one at a time,
             so tail latency compounds fast — the user's experience gets worse exactly when the
             task gets harder.
           </p>
         </div>
 
-        <div className={`runway-panel reveal ${panelInView ? 'in' : ''}`} ref={panelRef}>
-          {ROWS.map((row) => (
-            <div className="runway-item" key={row.label}>
-              <div className="top">
-                <span className="lbl">{row.label}</span>
-                <span className="win-badge">{row.win}</span>
+        <div
+          ref={panelRef}
+          className={`border border-line rounded-lg bg-white overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            panelInView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+          }`}
+        >
+          {ROWS.map((row, idx) => (
+            <div key={row.label} className={`p-6 px-[26px] ${idx > 0 ? 'border-t border-line' : ''}`}>
+              <div className="flex justify-between items-baseline mb-3.5">
+                <span className="font-mono text-[11.5px] text-muted uppercase tracking-[0.03em]">{row.label}</span>
+                <span className="inline-flex items-center gap-1.5 bg-lime text-lime-ink font-mono text-[11px] font-bold px-2.5 py-1 rounded-[5px]">
+                  {row.win}
+                </span>
               </div>
-              <div className="lane a">
-                <span className="who"><i></i>Sequential AI</span>
-                <div className="ruler">
-                  <div className="ruler-fill" style={{ width: panelInView ? `${row.a.width}%` : 0 }} />
+
+              <div className="grid grid-cols-[112px_1fr_76px] items-center gap-3 mb-2.5">
+                <span className="font-mono text-[11.5px] text-ink-soft flex items-center gap-1.5">
+                  <i className="w-2 h-2 rounded-[2px] bg-orange inline-block" />Sequential AI
+                </span>
+                <div className="relative h-3 rounded-[3px] overflow-hidden bg-cream-2 [background-image:repeating-linear-gradient(90deg,var(--color-line-strong)_0,var(--color-line-strong)_1px,transparent_1px,transparent_20%)]">
+                  <div
+                    className="absolute inset-0 rounded-[3px] bg-orange transition-[width] duration-[1300ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+                    style={{ width: panelInView ? `${row.a.width}%` : 0 }}
+                  />
                 </div>
-                <span className="val">{row.a.val}</span>
+                <span className="font-mono text-[12.5px] text-right text-ink">{row.a.val}</span>
               </div>
-              <div className="lane b">
-                <span className="who"><i></i>Single-Agent</span>
-                <div className="ruler">
-                  <div className="ruler-fill" style={{ width: panelInView ? `${row.b.width}%` : 0 }} />
+
+              <div className="grid grid-cols-[112px_1fr_76px] items-center gap-3">
+                <span className="font-mono text-[11.5px] text-ink-soft flex items-center gap-1.5">
+                  <i className="w-2 h-2 rounded-[2px] bg-muted inline-block" />Single-Agent
+                </span>
+                <div className="relative h-3 rounded-[3px] overflow-hidden bg-cream-2 [background-image:repeating-linear-gradient(90deg,var(--color-line-strong)_0,var(--color-line-strong)_1px,transparent_1px,transparent_20%)]">
+                  <div
+                    className="absolute inset-0 rounded-[3px] bg-muted transition-[width] duration-[1300ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+                    style={{ width: panelInView ? `${row.b.width}%` : 0 }}
+                  />
                 </div>
-                <span className="val">{row.b.val}</span>
+                <span className="font-mono text-[12.5px] text-right text-ink">{row.b.val}</span>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="split-stats reveal in">
-          <div className="split-stat"><div className="k">Worst case</div><div className="v">2.9s <span className="sub">vs 11.4s</span></div></div>
-          <div className="split-stat"><div className="k">Errors / 1,200</div><div className="v">6 <span className="sub">vs 21</span></div></div>
+        <div className="flex flex-col sm:flex-row mt-[22px] border border-line rounded-md overflow-hidden">
+          <div className="flex-1 p-[18px] px-[22px] bg-white sm:border-r border-t sm:border-t-0 border-line first:border-t-0">
+            <div className="font-mono text-[11px] text-muted uppercase mb-1">Worst case</div>
+            <div className="font-display font-bold text-xl">2.9s <span className="font-mono font-medium text-xs text-muted ml-1.5">vs 11.4s</span></div>
+          </div>
+          <div className="flex-1 p-[18px] px-[22px] bg-white border-t sm:border-t-0 border-line">
+            <div className="font-mono text-[11px] text-muted uppercase mb-1">Errors / 1,200</div>
+            <div className="font-display font-bold text-xl">6 <span className="font-mono font-medium text-xs text-muted ml-1.5">vs 21</span></div>
+          </div>
         </div>
       </div>
     </section>

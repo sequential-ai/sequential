@@ -10,7 +10,7 @@ import Pricing from '../components/landing/Pricing';
 import FAQ from '../components/landing/FAQ';
 import FinalCTA from '../components/landing/FinalCTA';
 import Footer from '../components/landing/Footer';
-import '../styles/landing.css';
+import '../styles/tokens.css';
 
 export default function LandingPage() {
   return (

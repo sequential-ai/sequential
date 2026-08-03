@@ -1,4 +1,4 @@
-export default function LogoMark({ className = 'logo-mark' }) {
+export default function LogoMark({ className = 'w-6 h-6' }) {
   return (
     <svg
       className={className}

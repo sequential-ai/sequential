@@ -20,20 +20,24 @@ const CARDS = [
 
 export default function Stack() {
   return (
-    <section className="stack-section">
-      <div className="wrap">
-        <div className="stack-head reveal in">
-          <span className="eyebrow">The full stack</span>
-          <h2>Sequential AI adds coordination where single-agent loops stop.</h2>
-          <p>
+    <section className="bg-dark text-cream-on-dark py-[100px]">
+      <div className="max-w-[1180px] mx-auto px-8">
+        <div className="max-w-[640px] mb-9">
+          <span className="eyebrow flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-on-dark mb-3 [&::before]:bg-orange-2">
+            The full stack
+          </span>
+          <h2 className="text-cream-on-dark font-display font-bold text-[clamp(26px,3.8vw,38px)] my-3.5">
+            Sequential AI adds coordination where single-agent loops stop.
+          </h2>
+          <p className="text-muted-on-dark text-[15.5px]">
             A single-agent loop reads one source, decides what's next, reads the next one —
             sequentially. When a task needs ten sources cross-referenced, it's still reading them
             one at a time.
           </p>
         </div>
 
-        <div className="stack-callout reveal in">
-          <AlertTriangle size={18} />
+        <div className="border-l-[3px] border-orange-2 rounded-r-md bg-dark-surface p-5 px-6 mb-7 flex gap-3.5 items-start text-sm text-cream-on-dark">
+          <AlertTriangle size={18} className="shrink-0 text-orange-2 mt-0.5" />
           <span>
             A single-agent loop's product surface is search-then-read. When a task needs
             coordinated, parallel execution, there's no version of it that scales — Sequential AI
@@ -41,14 +45,18 @@ export default function Stack() {
           </span>
         </div>
 
-        <div className="stack-grid reveal in">
+        <div className="grid md:grid-cols-3 gap-4">
           {CARDS.map((c) => (
-            <div className="stack-card" key={c.title}>
-              <h3>{c.title}</h3>
-              <p>{c.body}</p>
-              <div className="stack-compare">
-                <span className="yes">✓ Sequential AI</span>
-                <span className="no">{c.no}</span>
+            <div
+              key={c.title}
+              className="border border-dark-line bg-dark-surface p-[26px]"
+              style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%)' }}
+            >
+              <h3 className="text-cream-on-dark text-base font-display font-semibold mb-2.5">{c.title}</h3>
+              <p className="text-muted-on-dark text-[13.5px] leading-[1.6] mb-[18px]">{c.body}</p>
+              <div className="flex flex-col gap-[7px] font-mono text-[11.5px] pt-3.5 border-t border-dashed border-dark-line">
+                <span className="text-lime">✓ Sequential AI</span>
+                <span className="text-muted-on-dark">{c.no}</span>
               </div>
             </div>
           ))}

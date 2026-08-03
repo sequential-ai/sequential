@@ -29,31 +29,40 @@ export default function FAQ() {
   const [openIdx, setOpenIdx] = useState('01');
 
   return (
-    <section className="faq-section" id="faq">
-      <div className="wrap">
-        <div className="faq-head reveal in">
-          <span className="eyebrow">FAQ</span>
-          <h2>Common questions.</h2>
+    <section className="pb-[110px]" id="faq">
+      <div className="max-w-[1180px] mx-auto px-8">
+        <div className="mb-[30px]">
+          <span className="eyebrow flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted mb-3">FAQ</span>
+          <h2 className="font-display font-bold text-[clamp(24px,3.4vw,32px)]">Common questions.</h2>
         </div>
-        <div className="faq-list reveal in">
+        <div className="max-w-[760px] border-t border-line">
           {QUESTIONS.map((item) => {
             const isOpen = openIdx === item.idx;
             return (
-              <div
-                className={`faq-item ${item.featured ? 'featured' : ''} ${isOpen ? 'open' : ''}`}
-                key={item.idx}
-              >
+              <div className="border-b border-line" key={item.idx}>
                 <button
-                  className="faq-q"
+                  className="w-full flex items-center gap-4 py-5 px-1 text-left text-[15px] font-semibold"
                   onClick={() => setOpenIdx(isOpen ? null : item.idx)}
                   aria-expanded={isOpen}
                 >
-                  <span className="idx">{item.idx}</span>
-                  <span className="qtxt">{item.q}</span>
-                  <ChevronDown className="chev" size={16} />
+                  <span className={`font-mono text-[11px] shrink-0 w-[22px] ${item.featured ? 'text-orange' : 'text-muted'}`}>
+                    {item.idx}
+                  </span>
+                  <span className={`flex-1 ${item.featured ? 'text-orange' : ''}`}>{item.q}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`shrink-0 text-ink-soft transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                      isOpen ? 'rotate-180' : ''
+                    }`}
+                  />
                 </button>
-                <div className="faq-a" style={{ maxHeight: isOpen ? '400px' : '0px' }}>
-                  <div className="faq-a-inner">{item.a}</div>
+                <div
+                  className="overflow-hidden transition-[max-height] duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+                  style={{ maxHeight: isOpen ? '400px' : '0px' }}
+                >
+                  <div className="pb-[22px] pl-[42px] pr-1 text-ink-soft text-[14.5px] max-w-[620px] leading-[1.7]">
+                    {item.a}
+                  </div>
                 </div>
               </div>
             );

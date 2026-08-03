@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+/* ============================================
+   DESIGN TOKENS as Tailwind v4 @theme keys.
+   --color-* -> bg-*, text-*, border-* utilities
+   --font-*  -> font-* utilities
+   --radius-* -> rounded-* utilities
+   --animate-* + matching @keyframes -> animate-* utilities
+   ============================================ */
+@theme {
+  --color-cream: #f6f1e9;
+  --color-cream-2: #efe8db;
+  --color-peach: #fcebdd;
+  --color-peach-line: #f0c9a8;
+  --color-ink: #17140f;
+  --color-ink-soft: #4a4636;
+  --color-muted: #928c77;
+  --color-line: rgba(23, 20, 15, 0.11);
+  --color-line-strong: rgba(23, 20, 15, 0.18);
+
+  --color-orange: #f2541b;
+  --color-orange-2: #ff7a3d;
+  --color-orange-soft: rgba(242, 84, 27, 0.1);
+
+  --color-lime: #cff23a;
+  --color-lime-ink: #16210a;
+
+  --color-dark: #14110a;
+  --color-dark-surface: #1e1a10;
+  --color-dark-line: rgba(255, 255, 255, 0.1);
+  --color-cream-on-dark: #f6f1e9;
+  --color-muted-on-dark: #8c8672;
+
+  --font-display: 'Playfair Display', serif;
+  --font-body: 'Playfair Display', serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 22px;
+
+  --ease-brand: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* one-shot / looping animations that Tailwind's built-ins
+     (animate-spin / animate-pulse / animate-ping) don't cover exactly */
+  --animate-blink: blink 1.1s step-end infinite;
+  --animate-qpulse: qpulse 0.55s ease-out;
+  --animate-flowmove: flowmove 1.3s linear infinite;
+  --animate-scroll-left: scroll-left 26s linear infinite;
+  --animate-llmpulse: llmpulse 1.6s ease-in-out infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+@keyframes qpulse {
+  0% { box-shadow: 0 0 0 0 rgba(242, 84, 27, 0.45); }
+  100% { box-shadow: 0 0 0 16px rgba(242, 84, 27, 0); }
+}
+@keyframes flowmove {
+  0% { left: 0%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { left: 88%; opacity: 0; }
+}
+@keyframes scroll-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes llmpulse {
+  0%, 100% { opacity: 0; transform: scale(0.96); }
+  50% { opacity: 0.5; transform: scale(1); }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-orange);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Two small pieces that are cleaner as a reusable class than 40 repeated
+   utilities: the eyebrow "tick" pseudo-element, and the brand gradient bar. */
+@layer components {
+  .eyebrow::before {
+    content: '';
+    width: 14px;
+    height: 1px;
+    background: var(--color-orange);
+    display: inline-block;
+  }
+  .grad-bar {
+    background: linear-gradient(90deg, #ff9245 0%, #f2541b 30%, #c23dbe 65%, #6b3dff 100%);
+  }
+}
