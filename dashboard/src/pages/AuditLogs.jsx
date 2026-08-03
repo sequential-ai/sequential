@@ -123,7 +123,7 @@ export default function AuditLogs() {
           </p>
         </div>
 
-        <Button variant="outline" size="xs" className="rounded-lg h-8 text-xs gap-1">
+        <Button variant="outline" size="xs" className="rounded h-8 text-xs gap-1">
           <Download className="h-3 w-3" /> Export Audit Trail
         </Button>
       </div>

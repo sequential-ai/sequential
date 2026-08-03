@@ -13,16 +13,17 @@ export function NavMain({ sections }) {
         if (section.isSingle) {
           const item = section.item;
           const Icon = item.icon;
-          const isActive = pathname === item.href || (item.href === "/dashboard" && pathname === "/dashboard");
+          const isPlaygroundActive = (item.href.startsWith("/dashboard/playground") || item.href === "/dashboard/playground") && pathname.startsWith("/dashboard/playground");
+          const isActive = isPlaygroundActive || (pathname === item.href || (item.href === "/dashboard" && pathname === "/dashboard"));
 
           return (
             <div key={item.title || idx} className="space-y-1">
               <Link
                 to={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-[15px] transition-all group",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] transition-all group",
                   isActive
-                    ? "bg-primary/10 dark:bg-primary/15 text-primary font-normal shadow-2xs"
+                    ? "text-foreground bg-black/5 dark:bg-white/5 font-medium shadow-2xs"
                     : "text-foreground/85 dark:text-zinc-300 font-light hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                 )}
               >
@@ -57,20 +58,21 @@ export function NavMain({ sections }) {
               {section.items?.map((item) => {
                 const Icon = item.icon;
                 // Active matching
+                const isPlaygroundActive = (item.href.startsWith("/dashboard/playground") || item.href === "/dashboard/playground") && pathname.startsWith("/dashboard/playground");
                 const isActive =
                   item.href === "/dashboard"
                     ? pathname === "/dashboard"
-                    : (pathname === item.href || (item.href.includes('?') && currentUrl === item.href) || (!item.href.includes('?') && pathname.startsWith(item.href) && item.href !== "/dashboard"));
+                    : isPlaygroundActive || (pathname === item.href || (item.href.includes('?') && currentUrl === item.href) || (!item.href.includes('?') && pathname.startsWith(item.href) && item.href !== "/dashboard"));
 
                 return (
                   <Link
                     key={item.title}
                     to={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-lg text-[15px] transition-all group",
+                      "flex items-center gap-3 px-3 py-1.5 rounded-lg text-[14px] transition-all group",
                       isActive
-                        ? "bg-primary/10 dark:bg-primary/15 text-primary font-normal shadow-2xs"
-                        : "text-foreground/85 dark:text-zinc-300 font-light hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                        ? "text-foreground bg-black/5 dark:bg-white/15 font-medium shadow-2xs"
+                        : "text-foreground/85 dark:text-zinc-300 font-light hover:text-foreground hover:bg-black/3 dark:hover:bg-white/10"
                     )}
                   >
                     {Icon && (
@@ -78,7 +80,7 @@ export function NavMain({ sections }) {
                         className={cn(
                           "h-4 w-4 shrink-0 transition-colors stroke-[1.75]",
                           isActive
-                            ? "text-primary"
+                            ? "text-foreground dark:text-white"
                             : "text-foreground/70 dark:text-zinc-400 group-hover:text-foreground"
                         )}
                       />

@@ -199,9 +199,101 @@ const deleteApiKey = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Bulk Toggle API Keys status (Enable / Disable)
+ * @route   PATCH /api/v1/apikeys/bulk/toggle
+ */
+const bulkToggleApiKeys = async (req, res) => {
+    try {
+        const { ids, enable } = req.body;
+        const clerkUserId = req.user.id;
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: "No API key IDs provided" });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { clerkUserId },
+            include: { memberships: true }
+        });
+
+        if (!user || user.memberships.length === 0) {
+            return res.status(404).json({ success: false, message: "User or organization not found" });
+        }
+
+        const organizationId = user.memberships[0].organizationId;
+
+        await prisma.apiKey.updateMany({
+            where: {
+                id: { in: ids },
+                organizationId,
+                deletedAt: null
+            },
+            data: {
+                revokedAt: enable ? null : new Date()
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `${ids.length} API key(s) ${enable ? 'enabled' : 'disabled'} successfully`
+        });
+    } catch (error) {
+        console.error("Bulk Toggle API Keys Error: ", error);
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
+/**
+ * @desc    Bulk Delete API Keys (Soft delete)
+ * @route   POST /api/v1/apikeys/bulk/delete
+ */
+const bulkDeleteApiKeys = async (req, res) => {
+    try {
+        const { ids } = req.body;
+        const clerkUserId = req.user.id;
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: "No API key IDs provided" });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { clerkUserId },
+            include: { memberships: true }
+        });
+
+        if (!user || user.memberships.length === 0) {
+            return res.status(404).json({ success: false, message: "User or organization not found" });
+        }
+
+        const organizationId = user.memberships[0].organizationId;
+
+        await prisma.apiKey.updateMany({
+            where: {
+                id: { in: ids },
+                organizationId,
+                deletedAt: null
+            },
+            data: {
+                deletedAt: new Date()
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `${ids.length} API key(s) deleted successfully`
+        });
+    } catch (error) {
+        console.error("Bulk Delete API Keys Error: ", error);
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
 module.exports = {
     getApiKeys,
     createApiKey,
     toggleApiKey,
-    deleteApiKey
+    deleteApiKey,
+    bulkToggleApiKeys,
+    bulkDeleteApiKeys
 };

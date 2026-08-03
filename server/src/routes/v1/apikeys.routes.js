@@ -9,6 +9,10 @@ router.get("/", protect, apikeysController.getApiKeys);
 // Create a new API key
 router.post("/", protect, apikeysController.createApiKey);
 
+// Bulk operations
+router.patch("/bulk/toggle", protect, apikeysController.bulkToggleApiKeys);
+router.post("/bulk/delete", protect, apikeysController.bulkDeleteApiKeys);
+
 // Toggle API key (enable/disable)
 router.patch("/:id/toggle", protect, apikeysController.toggleApiKey);
 

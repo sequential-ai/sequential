@@ -26,6 +26,8 @@ export const api = {
   createApiKey: (payload) => client.post('/apikeys', payload),
   toggleApiKey: (id, data) => client.patch(`/apikeys/${id}/toggle`, data),
   deleteApiKey: (id) => client.delete(`/apikeys/${id}`),
+  bulkToggleApiKeys: (ids, enable) => client.patch('/apikeys/bulk/toggle', { ids, enable }),
+  bulkDeleteApiKeys: (ids) => client.post('/apikeys/bulk/delete', { ids }),
 
   // Tasks
   createTask: (payload, apiKey) => client.post('/tasks', payload, {

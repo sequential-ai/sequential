@@ -48,7 +48,7 @@
    ============================================= */
 :root {
   /* Light Theme */
-  /* Main Content: slightly lighter than sidebar (#FAF8F5 vs #EFE8DB) */
+  /* Main Content: pure white */
   --background: #FAF8F5;
   --foreground: #17140F;
   --card: #FFFFFF;
@@ -71,7 +71,7 @@
   --radius: 0.5rem;
 
   /* Sidebar tokens: rich cream #EFE8DB */
-  --sidebar: #EFE8DB;
+  --sidebar: #fff;
   --sidebar-foreground: #17140F;
   --sidebar-primary: #F2541B;
   --sidebar-primary-foreground: #FFFFFF;

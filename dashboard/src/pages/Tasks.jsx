@@ -317,7 +317,7 @@ run();`
           <button
             type="button"
             onClick={() => setActiveView(activeView === 'playground' ? 'history' : 'playground')}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold font-mono uppercase transition-all cursor-pointer border ${activeView === 'history'
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold font-mono uppercase transition-all cursor-pointer border ${activeView === 'history'
               ? 'bg-foreground text-background border-foreground'
               : 'border-border/80 text-muted-foreground hover:text-foreground bg-card hover:bg-muted'
               }`}
@@ -363,7 +363,7 @@ run();`
               <Button
                 size="sm"
                 onClick={() => setIsCodeModalOpen(true)}
-                className="rounded-lg h-8 px-3.5 text-xs font-bold uppercase text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
+                className="rounded h-8 px-3.5 text-xs font-bold uppercase text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
                 style={{ background: 'var(--primary, #F2541B)' }}
               >
                 <Code2 className="h-3.5 w-3.5" />
@@ -461,7 +461,7 @@ run();`
                   size="sm"
                   disabled={!prompt.trim() || isRunning}
                   onClick={handleRunTask}
-                  className="rounded-lg h-8 px-5 text-xs font-bold uppercase text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
+                  className="rounded h-8 px-5 text-xs font-bold uppercase text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
                   style={{ background: 'var(--primary, #F2541B)' }}
                 >
                   {isRunning ? (
@@ -729,7 +729,7 @@ run();`
                 variant="outline"
                 size="sm"
                 onClick={() => setActiveView('playground')}
-                className="h-8 text-xs rounded-lg"
+                className="h-8 text-xs rounded"
               >
                 Back to Playground
               </Button>
@@ -808,7 +808,7 @@ run();`
                 variant="outline"
                 size="sm"
                 onClick={handleCopyCode}
-                className="rounded-lg h-7 px-2.5 text-xs flex items-center gap-1 font-mono"
+                className="rounded h-7 px-2.5 text-xs flex items-center gap-1 font-mono"
               >
                 {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
                 {isCopied ? 'Copied' : 'Copy Code'}

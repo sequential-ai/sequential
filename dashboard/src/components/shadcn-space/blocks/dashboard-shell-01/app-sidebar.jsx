@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -63,17 +63,21 @@ import {
   ListTodo,
   Webhook,
 } from "lucide-react";
+import { FlaskConicalIcon } from "lucide-react";
 
 export const sidebarSections = [
   {
-    isSingle: true,
-    item: { title: "Overview", icon: Home, href: "/dashboard" },
+   
+    items: [
+    { title: "Overview", icon: Home, href: "/dashboard" },
+    { title: "Playground", icon: FlaskConicalIcon, href: "/dashboard/playground/task" },
+    ]
   },
   {
-    title: "Playground",
+    title: "Console",
     items: [
       { title: "Task", icon: ListTodo, href: "/dashboard/tasks" },
-      { title: "Monitor", icon: Crosshair, href: "/dashboard/tasks?tab=active" },
+      { title: "Monitor", icon: Crosshair, href: "/dashboard/monitor" },
       { title: "Memory", icon: Grid2X2, href: "/dashboard/projects" },
       // { title: "Search", icon: Search, href: "/dashboard/tasks?search=true" },
       // { title: "Extract", icon: ScanText, href: "/dashboard/api-keys" },
@@ -106,6 +110,8 @@ const SequentialAppSidebar = ({ children }) => {
   const { signOut } = useClerk();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPlayground = location.pathname.startsWith("/dashboard/playground");
 
   // Create Org state
   const [isCreateOrgOpen, setIsCreateOrgOpen] = useState(false);
@@ -169,7 +175,7 @@ const SequentialAppSidebar = ({ children }) => {
                   align="start"
                   side="bottom"
                   sideOffset={6}
-                  className="w-64 p-1.5 rounded-2xl border border-border shadow-xl bg-card text-card-foreground overflow-hidden"
+                  className="w-74 p-1.5 rounded-2xl border border-border shadow-xl bg-card text-card-foreground overflow-hidden"
                 >
                   {/* Current and other orgs */}
                   {memberships && memberships.length > 0 ? (
@@ -179,13 +185,13 @@ const SequentialAppSidebar = ({ children }) => {
                       return (
                         <DropdownMenuItem
                           key={m.id || mOrg?.id}
-                          className="p-2.5 rounded-xl flex items-center justify-between cursor-pointer focus:bg-muted/60"
+                          className="p-2.5 rounded-lg flex items-center justify-between cursor-pointer focus:bg-muted/60"
                           onClick={() => {
                             if (mOrg?.id) switchOrganization(mOrg.id);
                           }}
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-sm font-semibold text-foreground truncate">
+                            <span className="text-xs font-semibold text-foreground truncate">
                               {mOrg?.name || "Workspace"}
                             </span>
                             <span className="text-xs bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 font-medium px-2 py-0.5 rounded-md border border-sky-100 dark:border-sky-900/40">
@@ -243,7 +249,7 @@ const SequentialAppSidebar = ({ children }) => {
           </div>
 
           {/* Bottom Section: Command hint + Balance Card + User Profile Popup */}
-          <SidebarFooter className="p-3 pt-0 flex flex-col gap-2.5">
+          <SidebarFooter className="p-3 pt-6 flex flex-col gap-2.5">
         
             {/* Sleek Mini Credit Card Balance Widget */}
             <Link
@@ -252,7 +258,7 @@ const SequentialAppSidebar = ({ children }) => {
             >
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <CreditCard className="h-3.5 w-3.5 text-primary" />
+                  <CreditCard className="h-3.5 w-3.5 " />
                   <span className="text-xs font-semibold text-foreground/90">Balance</span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -482,7 +488,7 @@ const SequentialAppSidebar = ({ children }) => {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsCreateOrgOpen(false)}
-                className="rounded-lg text-xs"
+                className="rounded text-xs"
               >
                 Cancel
               </Button>
@@ -490,7 +496,7 @@ const SequentialAppSidebar = ({ children }) => {
                 type="submit"
                 size="sm"
                 disabled={!newOrgName.trim()}
-                className="rounded-lg text-xs text-white font-medium shadow-xs"
+                className="rounded text-xs text-white font-medium shadow-xs"
                 style={{ background: "var(--primary)" }}
               >
                 Create Workspace
@@ -501,11 +507,19 @@ const SequentialAppSidebar = ({ children }) => {
       </Dialog>
 
       {/* Main Content Inset */}
-      <SidebarInset className="flex flex-col min-h-screen min-w-0 w-full overflow-x-hidden">
-        <header className="sticky top-0 z-50 flex items-center border-b border-border px-4 sm:px-6 py-2.5 bg-background">
-          <SiteHeader />
-        </header>
-        <main className="flex-1 p-4 sm:p-6 bg-background min-w-0 w-full overflow-x-hidden">
+      <SidebarInset className={cn(
+        "flex flex-col min-w-0 w-full",
+        isPlayground ? "h-screen max-h-screen overflow-hidden" : "min-h-screen overflow-x-hidden"
+      )}>
+        {!isPlayground && (
+          <header className="sticky top-0 z-50 flex items-center border-b border-border px-4 sm:px-6 py-2.5 bg-background shrink-0">
+            <SiteHeader />
+          </header>
+        )}
+        <main className={cn(
+          "flex-1 bg-background min-w-0 w-full",
+          isPlayground ? "p-0 h-full max-h-full overflow-hidden flex flex-col min-h-0" : "p-4 sm:p-6 overflow-x-hidden"
+        )}>
           {children}
         </main>
       </SidebarInset>

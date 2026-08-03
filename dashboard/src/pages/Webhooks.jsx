@@ -212,7 +212,7 @@ export default function Webhooks() {
             variant="outline"
             size="sm"
             onClick={handleRefresh}
-            className="rounded-lg h-8 px-3 text-xs font-semibold text-foreground border-border/80 hover:bg-muted cursor-pointer flex items-center gap-1.5 uppercase font-mono tracking-wider"
+            className="rounded h-8 px-3 text-xs font-semibold text-foreground border-border/80 hover:bg-muted cursor-pointer flex items-center gap-1.5 uppercase font-mono tracking-wider"
           >
             <RotateCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             REFRESH
@@ -271,7 +271,7 @@ export default function Webhooks() {
           <Button
             size="sm"
             onClick={() => setIsRegenerateOpen(true)}
-            className="rounded-lg h-8 px-4 text-xs font-bold uppercase text-white dark:text-zinc-900 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 shadow-xs cursor-pointer font-mono tracking-wide"
+            className="rounded h-8 px-4 text-xs font-bold uppercase text-white dark:text-zinc-900 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 shadow-xs cursor-pointer font-mono tracking-wide"
           >
             GENERATE NEW SECRET
           </Button>
@@ -288,7 +288,7 @@ export default function Webhooks() {
           <Button
             size="sm"
             onClick={() => setIsAddEndpointOpen(true)}
-            className="rounded-lg h-8 px-3 text-xs text-white font-semibold shadow-xs"
+            className="rounded h-8 px-3 text-xs text-white font-semibold shadow-xs"
             style={{ background: 'var(--primary)' }}
           >
             <Plus className="h-3.5 w-3.5 mr-1" />
@@ -339,7 +339,7 @@ export default function Webhooks() {
                       variant="outline"
                       size="sm"
                       onClick={() => handleTestPing(ep.url)}
-                      className="rounded-lg h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                      className="rounded h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       <Send className="h-3 w-3 mr-1" />
                       Test Ping
@@ -432,7 +432,7 @@ export default function Webhooks() {
               variant="outline"
               size="sm"
               onClick={() => setIsRegenerateOpen(false)}
-              className="rounded-lg text-xs"
+              className="rounded text-xs"
             >
               Cancel
             </Button>
@@ -440,7 +440,7 @@ export default function Webhooks() {
               type="button"
               size="sm"
               onClick={handleRegenerateSecret}
-              className="rounded-lg text-xs text-white bg-destructive hover:bg-destructive/90 shadow-xs font-semibold"
+              className="rounded text-xs text-white bg-destructive hover:bg-destructive/90 shadow-xs font-semibold"
             >
               Yes, Regenerate Secret
             </Button>
@@ -504,14 +504,14 @@ export default function Webhooks() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsAddEndpointOpen(false)}
-                className="rounded-lg text-xs"
+                className="rounded text-xs"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 size="sm"
-                className="rounded-lg text-xs text-white font-semibold shadow-xs"
+                className="rounded text-xs text-white font-semibold shadow-xs"
                 style={{ background: 'var(--primary)' }}
               >
                 Save Endpoint

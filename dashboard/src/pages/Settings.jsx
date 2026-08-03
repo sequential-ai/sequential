@@ -219,7 +219,7 @@ export default function Settings() {
           <Button
             type="submit"
             size="sm"
-            className="rounded-lg text-xs h-8 px-4 font-semibold text-white cursor-pointer shadow-xs"
+            className="rounded text-xs h-8 px-4 font-semibold text-white cursor-pointer shadow-xs"
             style={{ background: 'var(--primary)' }}
           >
             <Save className="h-3.5 w-3.5 mr-1" />

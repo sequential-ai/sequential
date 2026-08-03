@@ -342,7 +342,7 @@ export default function Onboard() {
                     </span>
                     <button
                       onClick={() => handleSelectOrg(item.id)}
-                      className="px-4 py-2 rounded-xl bg-white hover:bg-[#FB631B] text-black hover:text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                      className="px-4 py-2 rounded bg-white hover:bg-[#FB631B] text-black hover:text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                     >
                       Select
                     </button>
@@ -414,7 +414,7 @@ export default function Onboard() {
 
               <button
                 type="submit"
-                className="w-full h-11 bg-[#FB631B] hover:bg-[#e05210] text-white font-bold rounded-xl text-sm transition shadow-lg shadow-[#FB631B]/20 mt-3 flex items-center justify-center cursor-pointer"
+                className="w-full h-11 bg-[#FB631B] hover:bg-[#e05210] text-white font-bold rounded text-sm transition shadow-lg shadow-[#FB631B]/20 mt-3 flex items-center justify-center cursor-pointer"
               >
                 Continue
               </button>
@@ -456,7 +456,7 @@ export default function Onboard() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="h-11 px-3.5 bg-[#18181d] border border-zinc-800 border-l-0 rounded-r-xl text-xs font-semibold text-zinc-200 hover:text-white flex items-center gap-1.5 focus:outline-none transition shrink-0 cursor-pointer">
+                    <button className="h-11 px-3.5 bg-[#18181d] border border-zinc-800 border-l-0 rounded-r text-xs font-semibold text-zinc-200 hover:text-white flex items-center gap-1.5 focus:outline-none transition shrink-0 cursor-pointer">
                       <span>{selectedRole}</span>
                       <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                     </button>
@@ -514,7 +514,7 @@ export default function Onboard() {
                   <button
                     type="button"
                     onClick={handleStep2Submit}
-                    className="w-full h-11 bg-[#FB631B] hover:bg-[#e05210] text-white font-bold rounded-xl text-sm transition shadow-lg shadow-[#FB631B]/20 flex items-center justify-center cursor-pointer"
+                    className="w-full h-11 bg-[#FB631B] hover:bg-[#e05210] text-white font-bold rounded text-sm transition shadow-lg shadow-[#FB631B]/20 flex items-center justify-center cursor-pointer"
                   >
                     Invite &amp; Continue
                   </button>
@@ -594,7 +594,7 @@ export default function Onboard() {
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleCompleteOnboarding}
-                className="w-full h-11 bg-[#FB631B] hover:bg-[#e05210] text-white font-bold rounded-xl text-sm transition shadow-lg shadow-[#FB631B]/25 mt-7 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full h-11 bg-[#FB631B] hover:bg-[#e05210] text-white font-bold rounded text-sm transition shadow-lg shadow-[#FB631B]/25 mt-7 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>

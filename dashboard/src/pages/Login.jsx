@@ -27,7 +27,7 @@ export default function Login() {
               card: 'bg-card shadow-none border-0 p-4',
               headerTitle: 'text-foreground font-bold text-lg',
               headerSubtitle: 'text-muted-foreground text-xs',
-              formButtonPrimary: 'bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-lg text-xs h-8',
+              formButtonPrimary: 'bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded text-xs h-8',
               formFieldInput: 'rounded-lg bg-muted/40 border-border text-foreground text-xs h-8',
               footerActionLink: 'text-primary hover:underline text-xs',
             }

@@ -396,7 +396,7 @@ export default function Usage() {
           size="sm"
           onClick={handleExport}
           disabled={isExporting}
-          className="rounded-lg h-7 px-2.5 text-xs flex items-center gap-1 font-medium shadow-2xs cursor-pointer"
+          className="rounded h-7 px-2.5 text-xs flex items-center gap-1 font-medium shadow-2xs cursor-pointer"
         >
           <Download className="h-3 w-3" />
           {isExporting ? 'Exporting...' : 'Export'}
@@ -584,7 +584,7 @@ export default function Usage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                          className="h-7 w-7 rounded text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
@@ -787,7 +787,7 @@ export default function Usage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setSelectedRequest(null)}
-                className="rounded-lg text-xs"
+                className="rounded text-xs"
               >
                 Close
               </Button>
@@ -797,7 +797,7 @@ export default function Usage() {
                   setSelectedRequest(null)
                   navigate('/dashboard/tasks')
                 }}
-                className="rounded-lg text-xs font-bold text-white shadow-xs font-mono flex items-center gap-1.5"
+                className="rounded text-xs font-bold text-white shadow-xs font-mono flex items-center gap-1.5"
                 style={{ background: 'var(--primary, #F2541B)' }}
               >
                 <Play className="h-3 w-3 fill-current" />

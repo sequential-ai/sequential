@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,8 +39,10 @@ import {
   AlertTriangle,
   Loader2,
   Power,
+  PowerOff,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
-
 
 function ApiKeysFallback() {
   return (
@@ -56,14 +59,20 @@ function ApiKeysFallback() {
       </div>
       <div className="p-6 rounded-2xl border border-border/80 bg-card space-y-4">
         <div className="flex justify-between items-center pb-4 border-b border-border/40">
-          <UiSkeleton className="h-5 w-40 rounded" />
+          <div className="flex items-center gap-3">
+            <UiSkeleton className="h-4 w-4 rounded" />
+            <UiSkeleton className="h-5 w-40 rounded" />
+          </div>
           <UiSkeleton className="h-5 w-24 rounded" />
         </div>
         {[1, 2, 3].map((i) => (
           <div key={i} className="flex items-center justify-between py-3 border-b border-border/20 last:border-0">
-            <div className="space-y-2">
-              <UiSkeleton className="h-5 w-48 rounded" />
-              <UiSkeleton className="h-4 w-72 rounded" />
+            <div className="flex items-center gap-3">
+              <UiSkeleton className="h-4 w-4 rounded" />
+              <div className="space-y-2">
+                <UiSkeleton className="h-5 w-48 rounded" />
+                <UiSkeleton className="h-4 w-72 rounded" />
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <UiSkeleton className="h-8 w-20 rounded-lg" />
@@ -81,11 +90,16 @@ export default function ApiKeys() {
   const { dbUser, refreshProfile, isSyncing } = useAuth()
   const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || 'yashtupkar6@gmail.com'
 
-  const [showKeyIds, setShowKeyIds] = useState(true)
+  const [showKeyIds, setShowKeyIds] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   // Keys Data
   const [apiKeys, setApiKeys] = useState([])
+
+  // Bulk Selection State
+  const [selectedKeyIds, setSelectedKeyIds] = useState([])
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false)
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false)
 
   // Revealed secrets state map
   const [revealedKeys, setRevealedKeys] = useState({})
@@ -99,7 +113,7 @@ export default function ApiKeys() {
   const [createdSecret, setCreatedSecret] = useState(null)
   const [copiedCreatedSecret, setCopiedCreatedSecret] = useState(false)
 
-  // Revoke Key Confirmation State
+  // Single Revoke Key Confirmation State
   const [keyToRevoke, setKeyToRevoke] = useState(null)
 
   // Fetch API keys from backend on mount or when user changes
@@ -140,6 +154,28 @@ export default function ApiKeys() {
       isMounted = false
     }
   }, [userEmail])
+
+  // Clean up selectedKeyIds if any selected keys are deleted or not in list
+  const validSelectedIds = selectedKeyIds.filter((id) => apiKeys.some((k) => k.id === id))
+  const isAllSelected = apiKeys.length > 0 && validSelectedIds.length === apiKeys.length
+  const isSomeSelected = validSelectedIds.length > 0 && !isAllSelected
+  const selectedKeysList = apiKeys.filter((k) => validSelectedIds.includes(k.id))
+
+  // Toggle single row selection
+  const handleToggleSelectKey = (keyId) => {
+    setSelectedKeyIds((prev) =>
+      prev.includes(keyId) ? prev.filter((id) => id !== keyId) : [...prev, keyId]
+    )
+  }
+
+  // Toggle master select all
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedKeyIds([])
+    } else {
+      setSelectedKeyIds(apiKeys.map((k) => k.id))
+    }
+  }
 
   // Toggle reveal
   const toggleRevealKey = (keyId) => {
@@ -224,7 +260,7 @@ export default function ApiKeys() {
     setCreatedSecret(generatedSecret)
   }
 
-  // Toggle key status (Enable / Disable) - keeps key in list with disabled state
+  // Toggle single key status (Enable / Disable)
   const handleToggleKey = async (keyId, enable) => {
     // Optimistic UI update
     setApiKeys((prev) =>
@@ -243,16 +279,73 @@ export default function ApiKeys() {
     }
   }
 
-  // Revoke / Delete key permanently - removes key completely from list
+  // Revoke / Delete single key permanently
   const handleRevokeKey = async (keyId) => {
     // Optimistic UI removal
     setApiKeys((prev) => prev.filter((k) => k.id !== keyId))
+    setSelectedKeyIds((prev) => prev.filter((id) => id !== keyId))
 
     try {
       await api.deleteApiKey(keyId)
       refreshProfile?.()
     } catch (err) {
       console.warn('Backend delete failed, removed locally:', err)
+    }
+  }
+
+  // Bulk Toggle (Enable / Disable) selected keys
+  const handleBulkToggle = async (enable) => {
+    if (validSelectedIds.length === 0 || isBulkProcessing) return
+
+    const targetIds = [...validSelectedIds]
+
+    // Optimistic UI update
+    setApiKeys((prev) =>
+      prev.map((k) =>
+        targetIds.includes(k.id)
+          ? { ...k, revokedAt: enable ? null : new Date().toISOString() }
+          : k
+      )
+    )
+
+    setIsBulkProcessing(true)
+    try {
+      await api.bulkToggleApiKeys(targetIds, enable)
+      refreshProfile?.()
+    } catch (err) {
+      console.warn('Backend bulk toggle failed, attempting fallback:', err)
+      try {
+        await Promise.allSettled(targetIds.map((id) => api.toggleApiKey(id, { enable })))
+        refreshProfile?.()
+      } catch (_) {}
+    } finally {
+      setIsBulkProcessing(false)
+    }
+  }
+
+  // Bulk Delete / Revoke selected keys permanently
+  const handleBulkDelete = async () => {
+    if (validSelectedIds.length === 0 || isBulkProcessing) return
+
+    const targetIds = [...validSelectedIds]
+
+    // Optimistic UI removal
+    setApiKeys((prev) => prev.filter((k) => !targetIds.includes(k.id)))
+    setSelectedKeyIds([])
+    setIsBulkDeleteModalOpen(false)
+
+    setIsBulkProcessing(true)
+    try {
+      await api.bulkDeleteApiKeys(targetIds)
+      refreshProfile?.()
+    } catch (err) {
+      console.warn('Backend bulk delete failed, attempting fallback:', err)
+      try {
+        await Promise.allSettled(targetIds.map((id) => api.deleteApiKey(id)))
+        refreshProfile?.()
+      } catch (_) {}
+    } finally {
+      setIsBulkProcessing(false)
     }
   }
 
@@ -264,444 +357,587 @@ export default function ApiKeys() {
       className="w-full min-w-0"
     >
       <div className="space-y-6">
-      {/* Page Title & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/70">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">API Keys</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            API keys allow you to authenticate requests to the Sequential API securely.
-          </p>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center gap-3 shrink-0">
-          {/* View Key IDs Switch */}
-          <div className="flex items-center gap-2 mr-2">
-            <Label htmlFor="view-key-ids" className="text-xs text-muted-foreground font-normal cursor-pointer select-none">
-              View Key IDs
-            </Label>
-            <Switch
-              id="view-key-ids"
-              checked={showKeyIds}
-              onCheckedChange={setShowKeyIds}
-            />
+        {/* Page Title & Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/70">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">API Keys</h1>
+            <p className="text-xs text-muted-foreground mt-1">
+              API keys allow you to authenticate requests to the Sequential API securely.
+            </p>
           </div>
 
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="rounded-lg h-8 px-3 text-xs font-mono uppercase tracking-wider font-semibold border-border/80 hover:bg-muted"
-          >
-            <a href="https://docs.sequential.ai" className="flex gap-2 items-center" target="_blank" rel="noreferrer">
-              API DOCS
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </Button>
+          {/* Action Controls */}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* View Key IDs Switch */}
+            <div className="flex items-center gap-2 mr-2">
+              <Label htmlFor="view-key-ids" className="text-xs text-muted-foreground font-normal cursor-pointer select-none">
+                View Key IDs
+              </Label>
+              <Switch
+                id="view-key-ids"
+                checked={showKeyIds}
+                onCheckedChange={setShowKeyIds}
+              />
+            </div>
 
-          <Button
-            size="sm"
-            onClick={handleOpenCreateKey}
-            className="rounded-lg h-8 px-3.5 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs cursor-pointer"
-            style={{ background: 'var(--primary)' }}
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            CREATE API KEY
-          </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="rounded h-8 px-3 text-xs font-mono uppercase tracking-wider font-semibold border-border/80 hover:bg-muted"
+            >
+              <a href="https://docs.sequential.ai" className="flex gap-2 items-center" target="_blank" rel="noreferrer">
+                API DOCS
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </Button>
+
+            <Button
+              size="sm"
+              onClick={handleOpenCreateKey}
+              className="rounded h-8 px-3.5 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs cursor-pointer"
+              style={{ background: 'var(--primary)' }}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              CREATE API KEY
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Main API Keys Table Card */}
-      <div className="space-y-4">
-        <Card className="rounded-xl border border-border/80 bg-card overflow-hidden shadow-2xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border/70 text-[11px] font-mono font-medium text-muted-foreground/80 bg-muted/20">
-                  <th className="py-2.5 px-4 font-mono font-semibold">API Key Name</th>
-                  <th className="py-2.5 px-4 font-mono font-semibold">Key Value</th>
-                  <th className="py-2.5 px-4 font-mono font-semibold">Status</th>
-                  <th className="py-2.5 px-4 font-mono font-semibold">Created By</th>
-                  <th className="py-2.5 px-4 font-mono font-semibold">Created At</th>
-                  {showKeyIds && (
-                    <th className="py-2.5 px-4 font-mono font-semibold">Key ID</th>
-                  )}
-                  <th className="py-2.5 px-3 text-right font-mono font-semibold w-10"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60 text-xs">
-                {apiKeys.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={showKeyIds ? 7 : 6}
-                      className="py-14 px-4 text-center"
-                    >
-                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-3">
-                        <div className="w-12 h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center text-muted-foreground shadow-2xs">
-                          <KeyRound className="w-6 h-6 text-muted-foreground" />
-                        </div>
-                        <div className="space-y-1">
-                          <h3 className="text-sm font-semibold text-foreground">No API keys yet</h3>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            Create an API key to securely authenticate requests to the Sequential API.
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={handleOpenCreateKey}
-                          className="mt-1 rounded-lg h-8 px-3.5 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs cursor-pointer"
-                          style={{ background: 'var(--primary)' }}
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          CREATE API KEY
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
+        {/* Bulk Action Toolbar Banner */}
+        {validSelectedIds.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-2.5 rounded-lg border border-border/80 bg-card text-foreground shadow-xs animate-in fade-in duration-150">
+            <div className="text-sm font-medium text-foreground select-none">
+              {validSelectedIds.length} selected
+            </div>
+
+            {/* Action Buttons: Enable, Disable, Delete */}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={() => handleBulkToggle(true)}
+                className="h-8 px-3 rounded text-xs font-medium border-border/80 hover:bg-muted cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                {isBulkProcessing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  apiKeys.map((key) => {
-                    const isRevealed = revealedKeys[key.id]
-                    const isCopied = copiedKeyId === key.id
-                    const isEnabled = !key.revokedAt
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                Enable
+              </Button>
 
-                    return (
-                      <tr
-                        key={key.id}
-                        className={`transition-colors group ${
-                          isEnabled
-                            ? 'hover:bg-muted/30'
-                            : 'bg-muted/15 opacity-75 hover:bg-muted/25'
-                        }`}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={() => handleBulkToggle(false)}
+                className="h-8 px-3 rounded text-xs font-medium border-border/80 hover:bg-muted cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                {isBulkProcessing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <XCircle className="h-3.5 w-3.5" />
+                )}
+                Disable
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={() => setIsBulkDeleteModalOpen(true)}
+                className="h-8 px-3 rounded text-xs font-medium bg-[#f43f5e] hover:bg-[#e11d48] text-white border-0 cursor-pointer flex items-center gap-1.5 shadow-2xs transition-colors"
+              >
+                {isBulkProcessing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5 text-white" />
+                )}
+                Delete
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Main API Keys Table Card */}
+        <div className="space-y-4">
+          <Card className="rounded-lg py-0 border border-border/80 bg-card overflow-hidden shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border/70 text-[11px] font-mono font-medium text-muted-foreground/80 bg-muted/20">
+                    {/* Checkbox Column */}
+                    <th className="py-2.5 px-3 w-10 text-center font-mono font-semibold">
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
+                          indeterminate={isSomeSelected}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all API keys"
+                        />
+                      </div>
+                    </th>
+                    <th className="py-2.5 px-4  font-semibold">API Key Name</th>
+                    <th className="py-2.5 px-4  font-semibold">Key Value</th>
+                    <th className="py-2.5 px-4 font-semibold">Status</th>
+                    <th className="py-2.5 px-4  font-semibold">Created By</th>
+                    <th className="py-2.5 px-4  font-semibold">Created At</th>
+                    {showKeyIds && (
+                      <th className="py-2.5 px-4  font-semibold">Key ID</th>
+                    )}
+                    <th className="py-2.5 px-3 text-right  font-semibold w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60 text-xs">
+                  {apiKeys.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={showKeyIds ? 8 : 7}
+                        className="py-14 px-4 text-center"
                       >
-                        {/* Key name & optional description */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`font-medium ${
-                                isEnabled ? 'text-foreground' : 'text-muted-foreground line-through decoration-muted-foreground/40'
-                              }`}
-                            >
-                              {key.name}
-                            </span>
+                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-3">
+                          <div className="w-12 h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center text-muted-foreground shadow-2xs">
+                            <KeyRound className="w-6 h-6 text-muted-foreground" />
                           </div>
-                          {key.description && (
-                            <div className="text-[11px] text-muted-foreground font-normal truncate max-w-[240px]">
-                              {key.description}
+                          <div className="space-y-1">
+                            <h3 className="text-sm font-semibold text-foreground">No API keys yet</h3>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              Create an API key to securely authenticate requests to the Sequential API.
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={handleOpenCreateKey}
+                            className="mt-1 rounded h-8 px-3.5 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs cursor-pointer"
+                            style={{ background: 'var(--primary)' }}
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1" />
+                            CREATE API KEY
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    apiKeys.map((key) => {
+                      const isRevealed = revealedKeys[key.id]
+                      const isCopied = copiedKeyId === key.id
+                      const isEnabled = !key.revokedAt
+                      const isSelected = validSelectedIds.includes(key.id)
+
+                      return (
+                        <tr
+                          key={key.id}
+                          className={`transition-colors group ${
+                            isSelected
+                              ? 'bg-primary/8 dark:bg-primary/10 hover:bg-primary/12'
+                              : isEnabled
+                              ? 'hover:bg-muted/30'
+                              : 'bg-muted/15 opacity-75 hover:bg-muted/25'
+                          }`}
+                        >
+                          {/* Row Checkbox */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => handleToggleSelectKey(key.id)}
+                                aria-label={`Select ${key.name}`}
+                              />
                             </div>
-                          )}
-                        </td>
-
-                        {/* Key value */}
-                        <td className="py-3 px-4 font-mono text-xs whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`font-semibold ${
-                                isEnabled ? 'text-foreground' : 'text-muted-foreground'
-                              }`}
-                            >
-                              {isRevealed ? key.fullSecret : key.maskedValue}
-                            </span>
-                            <button
-                              type="button"
-                              title={isRevealed ? 'Hide Secret' : 'Reveal Secret'}
-                              onClick={() => toggleRevealKey(key.id)}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                            >
-                              {isRevealed ? (
-                                <EyeOff className="h-3.5 w-3.5" />
-                              ) : (
-                                <Eye className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              title="Copy Secret"
-                              onClick={() => handleCopy(key.fullSecret, key.id)}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                            >
-                              {isCopied ? (
-                                <Check className="h-3.5 w-3.5 text-emerald-500" />
-                              ) : (
-                                <Copy className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-
-                        {/* Status Toggle & Badge */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2.5">
-                            <Switch
-                              checked={isEnabled}
-                              onCheckedChange={(checked) => handleToggleKey(key.id, checked)}
-                              className="scale-90 cursor-pointer"
-                              aria-label={`Toggle status for ${key.name}`}
-                            />
-                            {isEnabled ? (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 select-none">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                Enabled
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border select-none">
-                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-                                Disabled
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Created by */}
-                        <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                          {key.createdBy}
-                        </td>
-
-                        {/* Created at */}
-                        <td className="py-3 px-4 text-muted-foreground font-mono whitespace-nowrap">
-                          {key.createdAt}
-                        </td>
-
-                        {/* Key ID */}
-                        {showKeyIds && (
-                          <td className="py-3 px-4 font-mono text-[11px] text-foreground/90 whitespace-nowrap">
-                            {key.id}
                           </td>
-                        )}
 
-                        {/* Actions 3-dot dropdown */}
-                        <td className="py-3 px-3 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                          {/* Key name & optional description */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`font-medium text-sm capitalize ${
+                                  isEnabled ? 'text-foreground' : 'text-muted-foreground line-through decoration-muted-foreground/40'
+                                }`}
+                              >
+                                {key.name}
+                              </span>
+                            </div>
+                            {key.description && (
+                              <div className="text-[11px] text-muted-foreground font-normal truncate max-w-[240px]">
+                                {key.description}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Key value */}
+                          <td className="py-3 px-4 font-mono text-xs whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`font-semibold ${
+                                  isEnabled ? 'text-foreground' : 'text-muted-foreground'
+                                }`}
+                              >
+                                {isRevealed ? key.fullSecret : key.maskedValue}
+                              </span>
                               <button
                                 type="button"
-                                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                title={isRevealed ? 'Hide Secret' : 'Reveal Secret'}
+                                onClick={() => toggleRevealKey(key.id)}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                               >
-                                <MoreVertical className="h-4 w-4" />
+                                {isRevealed ? (
+                                  <EyeOff className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
                               </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-lg">
-                              <DropdownMenuItem
+                              <button
+                                type="button"
+                                title="Copy Secret"
                                 onClick={() => handleCopy(key.fullSecret, key.id)}
-                                className="text-xs flex items-center gap-2 cursor-pointer"
+                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                               >
-                                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                                Copy Key Value
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleCopy(key.id, key.id)}
-                                className="text-xs flex items-center gap-2 cursor-pointer"
-                              >
-                                <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                                Copy Key ID
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator className="my-1" />
-                              <DropdownMenuItem
-                                onClick={() => handleToggleKey(key.id, !isEnabled)}
-                                className="text-xs flex items-center gap-2 cursor-pointer"
-                              >
-                                <Power className="h-3.5 w-3.5 text-muted-foreground" />
-                                {isEnabled ? 'Disable Key' : 'Enable Key'}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator className="my-1" />
-                              <DropdownMenuItem
-                                onClick={() => setKeyToRevoke(key)}
-                                className="text-xs text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2 cursor-pointer"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Revoke Key
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
+                                {isCopied ? (
+                                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
 
-      {/* Create API Key Modal Dialog */}
-      <Dialog open={isCreateKeyModalOpen} onOpenChange={setIsCreateKeyModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl p-5">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold">
-              {createdSecret ? 'API Key Generated' : 'Create New API Key'}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {createdSecret
-                ? 'Make sure to copy your key now as you will not be able to see the full secret again.'
-                : 'Enter a recognizable name and description for this key to identify its purpose.'}
-            </DialogDescription>
-          </DialogHeader>
+                          {/* Status Toggle & Badge */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2.5">
+                              <Switch
+                                checked={isEnabled}
+                                onCheckedChange={(checked) => handleToggleKey(key.id, checked)}
+                                className="scale-90 cursor-pointer"
+                                aria-label={`Toggle status for ${key.name}`}
+                              />
+                              {isEnabled ? (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 select-none">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                  Enabled
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border select-none">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
+                          </td>
 
-          {createdSecret ? (
-            <div className="space-y-4 mt-2">
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
-                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
-                  Store this key securely. For security reasons, this value cannot be retrieved again after closing this window.
-                </p>
-              </div>
+                          {/* Created by */}
+                          <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
+                            {key.createdBy}
+                          </td>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">API Key Secret</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={createdSecret}
-                    className="rounded-lg font-mono text-xs h-9 bg-muted/30 select-all"
-                  />
+                          {/* Created at */}
+                          <td className="py-3 px-4 text-muted-foreground font-mono whitespace-nowrap">
+                            {key.createdAt}
+                          </td>
+
+                          {/* Key ID */}
+                          {showKeyIds && (
+                            <td className="py-3 px-4 font-mono text-[11px] text-foreground/90 whitespace-nowrap">
+                              {key.id}
+                            </td>
+                          )}
+
+                          {/* Actions 3-dot dropdown */}
+                          <td className="py-3 px-3 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-lg">
+                                <DropdownMenuItem
+                                  onClick={() => handleCopy(key.fullSecret, key.id)}
+                                  className="text-xs flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                                  Copy Key Value
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleCopy(key.id, key.id)}
+                                  className="text-xs flex items-center gap-2 cursor-pointer"
+                                >
+                                  <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                                  Copy Key ID
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="my-1" />
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleKey(key.id, !isEnabled)}
+                                  className="text-xs flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Power className="h-3.5 w-3.5 text-muted-foreground" />
+                                  {isEnabled ? 'Disable Key' : 'Enable Key'}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="my-1" />
+                                <DropdownMenuItem
+                                  onClick={() => setKeyToRevoke(key)}
+                                  className="text-xs text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Revoke Key
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+
+        {/* Create API Key Modal Dialog */}
+        <Dialog open={isCreateKeyModalOpen} onOpenChange={setIsCreateKeyModalOpen}>
+          <DialogContent className="sm:max-w-md rounded-2xl p-5">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold">
+                {createdSecret ? 'API Key Generated' : 'Create New API Key'}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                {createdSecret
+                  ? 'Make sure to copy your key now as you will not be able to see the full secret again.'
+                  : 'Enter a recognizable name and description for this key to identify its purpose.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {createdSecret ? (
+              <div className="space-y-4 mt-2">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
+                    Store this key securely. For security reasons, this value cannot be retrieved again after closing this window.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">API Key Secret</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={createdSecret}
+                      className="rounded-lg font-mono text-xs h-9 bg-muted/30 select-all"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdSecret)
+                        setCopiedCreatedSecret(true)
+                        setTimeout(() => setCopiedCreatedSecret(false), 2000)
+                      }}
+                      className="rounded h-9 px-3 text-white font-medium shadow-xs shrink-0 cursor-pointer"
+                      style={{ background: 'var(--primary)' }}
+                    >
+                      {copiedCreatedSecret ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 mr-1.5" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5 mr-1.5" />
+                          Copy
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <DialogFooter className="mt-4">
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(createdSecret)
-                      setCopiedCreatedSecret(true)
-                      setTimeout(() => setCopiedCreatedSecret(false), 2000)
-                    }}
-                    className="rounded-lg h-9 px-3 text-white font-medium shadow-xs shrink-0 cursor-pointer"
+                    onClick={() => setIsCreateKeyModalOpen(false)}
+                    className="rounded text-xs w-full text-white font-semibold shadow-xs cursor-pointer"
                     style={{ background: 'var(--primary)' }}
                   >
-                    {copiedCreatedSecret ? (
+                    Done
+                  </Button>
+                </DialogFooter>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateKeySubmit} className="space-y-4 mt-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="key-name" className="text-xs font-semibold">
+                    API Key Name
+                  </Label>
+                  <Input
+                    id="key-name"
+                    placeholder="e.g. Production Worker Daemon"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                    className="rounded-lg h-8 text-xs"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="key-description" className="text-xs font-semibold">
+                      Description
+                    </Label>
+                    <span className="text-[11px] text-muted-foreground font-normal">Optional</span>
+                  </div>
+                  <Textarea
+                    id="key-description"
+                    placeholder="e.g. Used for background ingestion worker, indexing daemon, or production services."
+                    value={newKeyDescription}
+                    onChange={(e) => setNewKeyDescription(e.target.value)}
+                    className="text-xs resize-none min-h-[70px]"
+                    rows={3}
+                  />
+                </div>
+
+                <DialogFooter className="mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsCreateKeyModalOpen(false)}
+                    className="rounded text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={!newKeyName.trim() || isSubmitting}
+                    className="rounded text-xs text-white font-semibold shadow-xs cursor-pointer"
+                    style={{ background: 'var(--primary)' }}
+                  >
+                    {isSubmitting ? (
                       <>
-                        <Check className="h-3.5 w-3.5 mr-1.5" />
-                        Copied
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        Generating...
                       </>
                     ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5 mr-1.5" />
-                        Copy
-                      </>
+                      'Generate Key'
                     )}
                   </Button>
-                </div>
-              </div>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
 
-              <DialogFooter className="mt-4">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setIsCreateKeyModalOpen(false)}
-                  className="rounded-lg text-xs w-full text-white font-semibold shadow-xs cursor-pointer"
-                  style={{ background: 'var(--primary)' }}
-                >
-                  Done
-                </Button>
-              </DialogFooter>
+        {/* Single Revoke Key Confirmation Dialog */}
+        <Dialog open={!!keyToRevoke} onOpenChange={(open) => !open && setKeyToRevoke(null)}>
+          <DialogContent className="sm:max-w-md rounded-2xl p-5">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Revoke API Key
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Are you sure you want to permanently revoke{' '}
+                <span className="font-semibold text-foreground">{keyToRevoke?.name}</span>? Any
+                services or workers using this key will immediately lose access. This action cannot be
+                undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter className="mt-4 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setKeyToRevoke(null)}
+                className="rounded text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (keyToRevoke) {
+                    handleRevokeKey(keyToRevoke.id)
+                    setKeyToRevoke(null)
+                  }
+                }}
+                className="rounded text-xs font-semibold shadow-xs cursor-pointer"
+              >
+                Revoke & Remove
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Delete / Revoke Confirmation Dialog */}
+        <Dialog open={isBulkDeleteModalOpen} onOpenChange={setIsBulkDeleteModalOpen}>
+          <DialogContent className="sm:max-w-md rounded-2xl p-5">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Revoke Multiple API Keys
+              </DialogTitle>
+              <DialogDescription className="text-xs leading-relaxed">
+                Are you sure you want to permanently revoke and delete{' '}
+                <span className="font-bold text-foreground">{validSelectedIds.length} API key(s)</span>?
+                Any systems or services relying on these keys will immediately lose access. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* List preview of selected keys */}
+            <div className="my-2 max-h-36 overflow-y-auto rounded-xl border border-border/80 bg-muted/30 p-2.5 space-y-1.5 divide-y divide-border/40">
+              {selectedKeysList.map((k) => (
+                <div key={k.id} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs font-mono">
+                  <span className="font-semibold text-foreground truncate max-w-[200px]">
+                    {k.name}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{k.maskedValue}</span>
+                </div>
+              ))}
             </div>
-          ) : (
-            <form onSubmit={handleCreateKeySubmit} className="space-y-4 mt-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="key-name" className="text-xs font-semibold">
-                  API Key Name
-                </Label>
-                <Input
-                  id="key-name"
-                  placeholder="e.g. Production Worker Daemon"
-                  value={newKeyName}
-                  onChange={(e) => setNewKeyName(e.target.value)}
-                  className="rounded-lg h-8 text-xs"
-                  required
-                  autoFocus
-                />
-              </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="key-description" className="text-xs font-semibold">
-                    Description
-                  </Label>
-                  <span className="text-[11px] text-muted-foreground font-normal">Optional</span>
-                </div>
-                <Textarea
-                  id="key-description"
-                  placeholder="e.g. Used for background ingestion worker, indexing daemon, or production services."
-                  value={newKeyDescription}
-                  onChange={(e) => setNewKeyDescription(e.target.value)}
-                  className="text-xs resize-none min-h-[70px]"
-                  rows={3}
-                />
-              </div>
-
-              <DialogFooter className="mt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsCreateKeyModalOpen(false)}
-                  className="rounded-lg text-xs cursor-pointer"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={!newKeyName.trim() || isSubmitting}
-                  className="rounded-lg text-xs text-white font-semibold shadow-xs cursor-pointer"
-                  style={{ background: 'var(--primary)' }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    'Generate Key'
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Revoke Key Confirmation Dialog */}
-      <Dialog open={!!keyToRevoke} onOpenChange={(open) => !open && setKeyToRevoke(null)}>
-        <DialogContent className="sm:max-w-md rounded-2xl p-5">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Revoke API Key
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Are you sure you want to permanently revoke{' '}
-              <span className="font-semibold text-foreground">{keyToRevoke?.name}</span>? Any
-              services or workers using this key will immediately lose access. This action cannot be
-              undone.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter className="mt-4 flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setKeyToRevoke(null)}
-              className="rounded-lg text-xs cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                if (keyToRevoke) {
-                  handleRevokeKey(keyToRevoke.id)
-                  setKeyToRevoke(null)
-                }
-              }}
-              className="rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
-            >
-              Revoke & Remove
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter className="mt-4 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="rounded text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={handleBulkDelete}
+                className="rounded text-xs font-semibold shadow-xs cursor-pointer"
+              >
+                {isBulkProcessing ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Revoking...
+                  </>
+                ) : (
+                  `Revoke ${validSelectedIds.length} Keys`
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </Skeleton>
   )
 }

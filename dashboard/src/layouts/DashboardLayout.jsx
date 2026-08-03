@@ -1,9 +1,10 @@
 import React from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Skeleton } from 'boneyard-js/react'
 import { useAuth } from '@/context/AuthContext'
 import SequentialAppSidebar from '@/components/shadcn-space/blocks/dashboard-shell-01/app-sidebar'
 import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
 function DashboardLayoutFallback() {
   return (
@@ -24,6 +25,8 @@ function DashboardLayoutFallback() {
 
 export default function DashboardLayout() {
   const { isSyncing } = useAuth()
+  const location = useLocation()
+  const isPlayground = location.pathname.startsWith('/dashboard/playground')
 
   return (
     <SequentialAppSidebar>
@@ -31,9 +34,9 @@ export default function DashboardLayout() {
         name="dashboard-layout"
         loading={isSyncing}
         fallback={<DashboardLayoutFallback />}
-        className="w-full min-w-0"
+        className={cn("w-full min-w-0", isPlayground && "h-full flex-1 flex flex-col")}
       >
-        <div className="w-full max-w-6xl mx-auto space-y-6 animate-fade-in min-w-0">
+        <div className={cn("w-full min-w-0", isPlayground ? "h-full flex-1 flex flex-col min-h-0" : "space-y-6 animate-fade-in")}>
           <Outlet />
         </div>
       </Skeleton>

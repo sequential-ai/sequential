@@ -332,7 +332,7 @@ export default function Team() {
             size="sm"
             onClick={() => fetchMembers(false)}
             disabled={isRefreshing || isLoading}
-            className="rounded-lg h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground border-border/80 cursor-pointer"
+            className="rounded h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground border-border/80 cursor-pointer"
             title="Refresh members"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
@@ -344,7 +344,7 @@ export default function Team() {
               setIsInviteOpen(true)
             }}
             size="sm"
-            className="rounded-lg h-8 px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
+            className="rounded h-8 px-3.5 text-xs font-semibold text-white shadow-xs cursor-pointer"
             style={{ background: 'var(--primary)' }}
           >
             <UserPlus className="h-3.5 w-3.5 mr-1.5" />
@@ -485,7 +485,7 @@ export default function Team() {
                   setInviteError('')
                   setIsInviteOpen(true)
                 }}
-                className="rounded-xl h-9 px-5 text-xs font-bold text-white shadow-md cursor-pointer"
+                className="rounded h-9 px-5 text-xs font-bold text-white shadow-md cursor-pointer"
                 style={{ background: 'var(--primary)' }}
               >
                 <UserPlus className="h-4 w-4 mr-2" />
@@ -514,7 +514,7 @@ export default function Team() {
               setRoleFilter('ALL')
               setStatusFilter('ALL')
             }}
-            className="rounded-lg text-xs h-8 cursor-pointer"
+            className="rounded text-xs h-8 cursor-pointer"
           >
             Clear Filters
           </Button>
@@ -833,7 +833,7 @@ export default function Team() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsInviteOpen(false)}
-                className="rounded-lg text-xs cursor-pointer"
+                className="rounded text-xs cursor-pointer"
               >
                 Cancel
               </Button>
@@ -841,7 +841,7 @@ export default function Team() {
                 type="submit"
                 size="sm"
                 disabled={!inviteEmail.trim() || isSubmittingInvite}
-                className="rounded-lg text-xs text-white font-medium shadow-xs cursor-pointer"
+                className="rounded text-xs text-white font-medium shadow-xs cursor-pointer"
                 style={{ background: 'var(--primary)' }}
               >
                 {isSubmittingInvite ? (
@@ -885,7 +885,7 @@ export default function Team() {
               variant="outline"
               size="sm"
               onClick={() => setMemberToRemove(null)}
-              className="rounded-lg text-xs cursor-pointer"
+              className="rounded text-xs cursor-pointer"
             >
               Cancel
             </Button>
@@ -895,7 +895,7 @@ export default function Team() {
               size="sm"
               disabled={isRemoving}
               onClick={handleConfirmRemove}
-              className="rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+              className="rounded text-xs font-semibold shadow-xs cursor-pointer"
             >
               {isRemoving ? (
                 <>

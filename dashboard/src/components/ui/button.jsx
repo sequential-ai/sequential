@@ -4,7 +4,7 @@ import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent text-xs font-semibold whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  "group/button inline-flex shrink-0 items-center justify-center rounded border border-transparent text-xs font-semibold whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
   {
     variants: {
       variant: {
@@ -26,13 +26,13 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-8 gap-1.5 px-3",
-        xs: "h-6 gap-1 rounded-md px-2 text-[11px] [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-md px-2.5 text-xs [&_svg:not([class*='size-'])]:size-3",
-        lg: "h-9 gap-1.5 rounded-lg px-4 text-xs",
-        icon: "size-8 rounded-lg",
-        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-7 rounded-md [&_svg:not([class*='size-'])]:size-3.5",
-        "icon-lg": "size-9 rounded-lg",
+        xs: "h-6 gap-1 rounded px-2 text-[11px] [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-7 gap-1 rounded px-2.5 text-xs [&_svg:not([class*='size-'])]:size-3",
+        lg: "h-9 gap-1.5 rounded px-4 text-xs",
+        icon: "size-8 rounded",
+        "icon-xs": "size-6 rounded [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-7 rounded [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-lg": "size-9 rounded",
       },
     },
     defaultVariants: {

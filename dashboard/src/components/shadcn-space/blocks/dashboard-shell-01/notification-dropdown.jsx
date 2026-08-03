@@ -95,7 +95,7 @@ const NotificationDropdown = ({
 
           {/* button */}
           <div className="p-1.5 border-t border-border bg-muted/10">
-            <Button asChild variant="ghost" className="rounded-lg w-full h-7 text-xs font-medium cursor-pointer hover:text-primary">
+            <Button asChild variant="ghost" className="rounded w-full h-7 text-xs font-medium cursor-pointer hover:text-primary">
               <Link to="/dashboard/notifications">View All Notifications</Link>
             </Button>
           </div>

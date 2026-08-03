@@ -23,7 +23,7 @@ export function SiteHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Gradient accent bar strip */}
+        {/* Gradient accent bar strip
         <div
           className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium"
           style={{
@@ -34,10 +34,10 @@ export function SiteHeader() {
         >
           <span className="inline-block w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: 'var(--seq-orange)' }} />
           3,160 credits
-        </div>
+        </div> */}
 
         {/* Theme toggle */}
-        <Button variant="ghost" size="icon" onClick={toggle} className="h-8 w-8 rounded-lg">
+        <Button variant="ghost" size="icon" onClick={toggle} className="h-8 w-8 rounded">
           {theme === 'dark'
             ? <Sun className="h-3.5 w-3.5" />
             : <Moon className="h-3.5 w-3.5" />
@@ -49,10 +49,10 @@ export function SiteHeader() {
           defaultOpen={false}
           align="end"
           trigger={
-            <div className="rounded-lg p-1.5 hover:bg-accent relative cursor-pointer">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded relative">
               <BellRing className="size-3.5" />
               <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500" />
-            </div>
+            </Button>
           }
         />
 

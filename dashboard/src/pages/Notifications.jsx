@@ -127,7 +127,7 @@ export default function Notifications() {
             variant="outline"
             size="xs"
             onClick={handleMarkAllRead}
-            className="rounded-lg h-8 text-xs gap-1"
+            className="rounded h-8 text-xs gap-1"
           >
             <CheckCheck className="h-3 w-3" /> Mark All as Read
           </Button>

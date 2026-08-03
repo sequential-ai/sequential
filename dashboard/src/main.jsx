@@ -16,7 +16,7 @@ configureBoneyard({
   color: '#F2EDE3',
   darkColor: '#18181b',
   animate: 'shimmer',
-  shimmerColor: '#FAF8F5',
+  shimmerColor: '#FFFFFF',
   darkShimmerColor: '#27272a',
   speed: '1.8s',
   shimmerAngle: 110,

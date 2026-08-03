@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { SignedIn, SignedOut } from '@clerk/clerk-react'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -16,6 +16,13 @@ import Notifications from './pages/Notifications'
 import Settings from './pages/Settings'
 import AuditLogs from './pages/AuditLogs'
 import Webhooks from './pages/Webhooks'
+import Playground from './pages/Playground'
+import Monitor from './pages/Monitor'
+
+function PlaygroundRedirect() {
+  const { tab } = useParams()
+  return <Navigate to={`/dashboard/playground/${tab || 'task'}`} replace />
+}
 
 function App() {
   return (
@@ -23,6 +30,10 @@ function App() {
       {/* Public Auth Routes */}
       <Route path="/login/*" element={<Login />} />
       <Route path="/signup/*" element={<Signup />} />
+
+      {/* Top-Level Playground Shortcut Routes */}
+      <Route path="/playground" element={<Navigate to="/dashboard/playground/task" replace />} />
+      <Route path="/playground/:tab" element={<PlaygroundRedirect />} />
 
       {/* Onboarding Flow Route */}
       <Route
@@ -55,6 +66,9 @@ function App() {
       >
         <Route index element={<Overview />} />
         <Route path="tasks" element={<Tasks />} />
+        <Route path="playground" element={<Navigate to="/dashboard/playground/task" replace />} />
+        <Route path="playground/:tab" element={<Playground />} />
+        <Route path="monitor" element={<Monitor />} />
         <Route path="tasks/:id" element={<TaskDetail />} />
         <Route path="projects" element={<Projects />} />
         <Route path="api-keys" element={<ApiKeys />} />

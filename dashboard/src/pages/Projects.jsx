@@ -166,7 +166,7 @@ export default function Projects() {
         </div>
         <Button
           onClick={() => setIsNewModalOpen(true)}
-          className="rounded-lg h-8 px-3.5 text-xs font-semibold text-white shadow-xs"
+          className="rounded h-8 px-3.5 text-xs font-semibold text-white shadow-xs"
           style={{ background: 'var(--primary)' }}
         >
           <Plus className="h-3.5 w-3.5 mr-1" />
@@ -285,10 +285,10 @@ export default function Projects() {
             </div>
 
             <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsNewModalOpen(false)} className="rounded-lg text-xs">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsNewModalOpen(false)} className="rounded text-xs">
                 Cancel
               </Button>
-              <Button type="submit" size="sm" className="rounded-lg text-xs text-white font-medium shadow-xs" style={{ background: 'var(--primary)' }}>
+              <Button type="submit" size="sm" className="rounded text-xs text-white font-medium shadow-xs" style={{ background: 'var(--primary)' }}>
                 Create Workspace
               </Button>
             </DialogFooter>

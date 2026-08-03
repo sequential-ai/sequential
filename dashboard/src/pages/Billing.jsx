@@ -403,7 +403,7 @@ export default function Billing() {
               <Button
                 size="sm"
                 onClick={() => setIsAddBalanceOpen(true)}
-                className="rounded-lg h-8 px-4 text-xs font-semibold text-white dark:text-zinc-900 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 shadow-xs cursor-pointer"
+                className="rounded h-8 px-4 text-xs font-semibold text-white dark:text-zinc-900 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 shadow-xs cursor-pointer"
               >
                 Add to balance
               </Button>
@@ -413,7 +413,7 @@ export default function Billing() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsAutoReloadOpen(true)}
-                className="rounded-lg h-8 px-3 text-xs font-medium border-border/80 hover:bg-muted cursor-pointer flex items-center gap-2"
+                className="rounded h-8 px-3 text-xs font-medium border-border/80 hover:bg-muted cursor-pointer flex items-center gap-2"
               >
                 <span>Auto-reload</span>
                 <span className="px-1.5 py-0.5 rounded bg-muted text-[11px] font-mono text-muted-foreground uppercase font-semibold">
@@ -684,14 +684,14 @@ export default function Billing() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsAddBalanceOpen(false)}
-                className="rounded-lg text-xs"
+                className="rounded text-xs"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 size="sm"
-                className="rounded-lg text-xs text-white font-semibold shadow-xs"
+                className="rounded text-xs text-white font-semibold shadow-xs"
                 style={{ background: 'var(--primary)' }}
               >
                 Confirm Payment
@@ -753,7 +753,7 @@ export default function Billing() {
                 type="button"
                 size="sm"
                 onClick={() => setIsAutoReloadOpen(false)}
-                className="rounded-lg text-xs w-full text-white font-semibold shadow-xs"
+                className="rounded text-xs w-full text-white font-semibold shadow-xs"
                 style={{ background: 'var(--primary)' }}
               >
                 Save Settings
@@ -855,7 +855,7 @@ export default function Billing() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsAddPaymentMethodOpen(false)}
-                className="rounded-lg text-xs"
+                className="rounded text-xs"
               >
                 Cancel
               </Button>
@@ -863,7 +863,7 @@ export default function Billing() {
                 type="submit"
                 size="sm"
                 disabled={!cardNumber.trim()}
-                className="rounded-lg text-xs text-white font-semibold shadow-xs"
+                className="rounded text-xs text-white font-semibold shadow-xs"
                 style={{ background: 'var(--primary)' }}
               >
                 Save Card

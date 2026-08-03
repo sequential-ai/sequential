@@ -214,14 +214,14 @@ export default function TaskDetail() {
               variant="outline"
               size="xs"
               onClick={handleCopyReport}
-              className="rounded-lg text-xs h-8 gap-1.5 cursor-pointer"
+              className="rounded text-xs h-8 gap-1.5 cursor-pointer"
             >
               {copiedReport ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
               {copiedReport ? 'Copied' : 'Copy Report'}
             </Button>
             <Button
               size="xs"
-              className="rounded-lg text-xs h-8 font-semibold text-white cursor-pointer shadow-xs"
+              className="rounded text-xs h-8 font-semibold text-white cursor-pointer shadow-xs"
               style={{ background: 'var(--seq-btn-grad)' }}
             >
               <RotateCcw className="h-3 w-3 mr-1" /> Re-run Task

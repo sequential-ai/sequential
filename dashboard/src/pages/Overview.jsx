@@ -203,7 +203,7 @@ export default function Overview() {
           <button
             type="button"
             onClick={handleCopyInstall}
-            className="h-8 px-2.5 rounded-lg border border-border/80 bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground text-[11px] font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="h-8 px-2.5 rounded border border-border/80 bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground text-[11px] font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Copy SDK Install Command"
           >
             <Terminal className="h-3 w-3 text-primary" />
@@ -215,7 +215,7 @@ export default function Overview() {
           <Button
             size="sm"
             onClick={() => setIsNewTaskOpen(true)}
-            className="rounded-lg h-8 px-3.5 text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
+            className="rounded h-8 px-3.5 text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
             style={{ background: 'var(--primary, #F2541B)' }}
           >
 
@@ -443,7 +443,7 @@ export default function Overview() {
               type="submit"
               size="sm"
               disabled={!quickPrompt.trim() || isExecutingQuick}
-              className="rounded-lg h-8 px-3 text-xs font-bold text-white shadow-xs flex items-center gap-1 font-mono shrink-0"
+              className="rounded h-8 px-3 text-xs font-bold text-white shadow-xs flex items-center gap-1 font-mono shrink-0"
               style={{ background: 'var(--primary, #F2541B)' }}
             >
               {isExecutingQuick ? (
@@ -601,7 +601,7 @@ export default function Overview() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsNewTaskOpen(false)}
-                className="rounded-lg text-xs"
+                className="rounded text-xs"
               >
                 Cancel
               </Button>
@@ -609,7 +609,7 @@ export default function Overview() {
                 type="submit"
                 size="sm"
                 disabled={isCreating || !newPrompt.trim()}
-                className="rounded-lg text-xs font-bold text-white shadow-xs flex items-center gap-1.5 font-mono"
+                className="rounded text-xs font-bold text-white shadow-xs flex items-center gap-1.5 font-mono"
                 style={{ background: 'var(--primary, #F2541B)' }}
               >
                 {isCreating ? (
