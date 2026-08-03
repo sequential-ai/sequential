@@ -64,6 +64,10 @@ import {
   Webhook,
 } from "lucide-react";
 import { FlaskConicalIcon } from "lucide-react";
+import { LucideGitGraph } from "lucide-react";
+import { ChartNoAxesColumn } from "lucide-react";
+import { ChartNoAxesCombined } from "lucide-react";
+import { Database } from "lucide-react";
 
 export const sidebarSections = [
   {
@@ -78,7 +82,7 @@ export const sidebarSections = [
     items: [
       { title: "Task", icon: ListTodo, href: "/dashboard/tasks" },
       { title: "Monitor", icon: Crosshair, href: "/dashboard/monitor" },
-      { title: "Memory", icon: Grid2X2, href: "/dashboard/projects" },
+      { title: "Memory", icon: Database, href: "/dashboard/projects" },
       // { title: "Search", icon: Search, href: "/dashboard/tasks?search=true" },
       // { title: "Extract", icon: ScanText, href: "/dashboard/api-keys" },
       // { title: "Responses", icon: MessageSquare, href: "/dashboard/audit-logs" },
@@ -95,7 +99,7 @@ export const sidebarSections = [
     title: "Organization",
     items: [
       { title: "Team Members", icon: Users, href: "/dashboard/team" },
-      { title: "Usage", icon: FlaskConical, href: "/dashboard/usage" },
+      { title: "Usage", icon: ChartNoAxesCombined, href: "/dashboard/usage" },
   
       { title: "Settings", icon: Settings, href: "/dashboard/settings" },
       { title: "Billing", icon: CreditCard, href: "/dashboard/billing" },
@@ -145,95 +149,248 @@ const SequentialAppSidebar = ({ children }) => {
             {/* Header: Brand Logo & Organization Dropdown */}
             <SidebarHeader className="py-1 px-3 space-y-2.5">
               {/* Sequential Brand Logo on Top */}
-              <div className="px-1 pt-1 flex items-center justify-between">
+              {/* <div className="px-1 pt-1 flex items-center justify-between">
                 <Link to="/dashboard" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
                   <span className="font-bold text-base tracking-tight text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
                     Sequential
                   </span>
                 </Link>
-              </div>
+              </div> */}
 
-              {/* Organization Dropdown (Compact, without logo, with default translucent bg) */}
+              {/* Organization Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <div className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer group outline-none select-none">
-                    <div className="flex flex-col items-start gap-1 min-w-0">
-                      <span className="text-sm font-semibold text-foreground truncate">
-                        {orgName}
-                      </span>
-                      <span className="text-[10px] text-sky-500 dark:text-sky-400 font-medium rounded leading-none">
-                        Admin
-                      </span>
+                  <button
+                    type="button"
+                    className="
+                      group flex w-full items-center gap-2.5
+                      rounded-lg border border-transparent
+                      bg-black/[0.035] dark:bg-white/[0.05]
+                      px-2.5 py-2
+                      text-left outline-none
+                      transition-all duration-150
+                      hover:bg-black/[0.06] dark:hover:bg-white/[0.08]
+                      data-[state=open]:bg-black/[0.06]
+                      dark:data-[state=open]:bg-white/[0.08]
+                    "
+                  >
+                    {/* Organization avatar */}
+                    <div
+                      className="
+                        flex h-8 w-8 shrink-0 items-center justify-center
+                        rounded-md bg-primary
+                        text-[12px] font-semibold text-white
+                        shadow-xs
+                      "
+                    >
+                      {orgName?.charAt(0)?.toUpperCase() || "S"}
                     </div>
 
-                    <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0 group-hover:text-foreground transition-colors" />
-                  </div>
+                    {/* Organization information */}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-semibold leading-5 text-foreground">
+                        {orgName}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] leading-none text-muted-foreground">
+                          Workspace
+                        </span>
+
+                        <span className="h-0.5 w-0.5 rounded-full bg-muted-foreground/50" />
+
+                        <span className="text-[10px] font-medium leading-none text-primary">
+                          Admin
+                        </span>
+                      </div>
+                    </div>
+
+                    <ChevronsUpDown
+                      className="
+                        h-3.5 w-3.5 shrink-0
+                        text-muted-foreground/60
+                        transition-colors
+                        group-hover:text-foreground/70
+                      "
+                    />
+                  </button>
                 </DropdownMenuTrigger>
 
-                {/* Organization Popup matching image */}
                 <DropdownMenuContent
                   align="start"
                   side="bottom"
                   sideOffset={6}
-                  className="w-74 p-1.5 rounded-2xl border border-border shadow-xl bg-card text-card-foreground overflow-hidden"
+                  className="
+                    w-[280px]
+                    rounded-xl
+                    border border-border
+                    bg-popover
+                    p-1.5
+                    text-popover-foreground
+                    shadow-lg
+                  "
                 >
-                  {/* Current and other orgs */}
+                  {/* Label */}
+                  <div className="px-2.5 pb-1.5 pt-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Workspaces
+                    </span>
+                  </div>
+
+                  {/* Organizations */}
                   {memberships && memberships.length > 0 ? (
                     memberships.map((m) => {
                       const mOrg = m.organization;
+                      const currentOrgName = mOrg?.name || "Workspace";
                       const isActive = mOrg?.id === org?.id;
+
+                      const role =
+                        m.role === "OWNER" || m.role === "ADMIN"
+                          ? "Admin"
+                          : m.role;
+
                       return (
                         <DropdownMenuItem
                           key={m.id || mOrg?.id}
-                          className="p-2.5 rounded-lg flex items-center justify-between cursor-pointer focus:bg-muted/60"
                           onClick={() => {
-                            if (mOrg?.id) switchOrganization(mOrg.id);
+                            if (mOrg?.id && !isActive) {
+                              switchOrganization(mOrg.id);
+                            }
                           }}
+                          className="
+                            group/item
+                            flex cursor-pointer items-center gap-2.5
+                            rounded-lg
+                            px-2.5 py-2
+                            outline-none
+                            focus:bg-muted
+                          "
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs font-semibold text-foreground truncate">
-                              {mOrg?.name || "Workspace"}
-                            </span>
-                            <span className="text-xs bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 font-medium px-2 py-0.5 rounded-md border border-sky-100 dark:border-sky-900/40">
-                              {m.role === 'OWNER' || m.role === 'ADMIN' ? 'Admin' : m.role}
-                            </span>
+                          {/* Organization avatar */}
+                          <div
+                            className="
+                              flex h-8 w-8 shrink-0 items-center justify-center
+                              rounded-md bg-primary
+                              text-[11px] font-semibold text-white
+                              shadow-xs
+                            "
+                          >
+                            {currentOrgName.charAt(0).toUpperCase()}
                           </div>
-                          {isActive && <Check className="h-4 w-4 text-foreground shrink-0 ml-2" />}
+
+                          {/* Info */}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[12px] font-medium text-foreground">
+                              {currentOrgName}
+                            </div>
+
+                            <div className="mt-0.5 flex items-center gap-1.5">
+                              <span className="text-[10px] text-muted-foreground">
+                                {role}
+                              </span>
+
+                              {isActive && (
+                                <>
+                                  <span className="h-0.5 w-0.5 rounded-full bg-muted-foreground/50" />
+
+                                  <span className="text-[10px] font-medium text-primary">
+                                    Current
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {isActive && (
+                            <div
+                              className="
+                                flex h-5 w-5 shrink-0 items-center justify-center
+                                rounded-full bg-primary/10
+                              "
+                            >
+                              <Check className="h-3 w-3 text-primary" />
+                            </div>
+                          )}
                         </DropdownMenuItem>
                       );
                     })
                   ) : (
                     <DropdownMenuItem
-                      className="p-2.5 rounded-xl flex items-center justify-between cursor-pointer focus:bg-muted/60"
                       onClick={() => navigate("/dashboard/settings")}
+                      className="
+                        flex cursor-pointer items-center gap-2.5
+                        rounded-lg px-2.5 py-2
+                        focus:bg-muted
+                      "
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm font-semibold text-foreground truncate">
-                          {orgName}
-                        </span>
-                        <span className="text-xs bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 font-medium px-2 py-0.5 rounded-md border border-sky-100 dark:border-sky-900/40">
-                          Admin
-                        </span>
+                      <div
+                        className="
+                          flex h-8 w-8 shrink-0 items-center justify-center
+                          rounded-md bg-primary
+                          text-[11px] font-semibold text-white
+                          shadow-xs
+                        "
+                      >
+                        {orgName?.charAt(0)?.toUpperCase() || "S"}
                       </div>
-                      <Check className="h-4 w-4 text-foreground shrink-0 ml-2" />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[12px] font-medium text-foreground">
+                          {orgName}
+                        </div>
+
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted-foreground">
+                            Admin
+                          </span>
+
+                          <span className="h-0.5 w-0.5 rounded-full bg-muted-foreground/50" />
+
+                          <span className="text-[10px] font-medium text-primary">
+                            Current
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
+                        <Check className="h-3 w-3 text-primary" />
+                      </div>
                     </DropdownMenuItem>
                   )}
 
-                  <DropdownMenuSeparator className="my-1 bg-border/80" />
+                  <DropdownMenuSeparator className="my-1 bg-border" />
 
-                  {/* Create Organization item */}
+                  {/* Create organization */}
                   <DropdownMenuItem
                     onClick={() => navigate("/onboard")}
-                    className="p-2.5 rounded-xl flex items-start gap-2.5 cursor-pointer focus:bg-muted/60"
+                    className="
+                      group/create
+                      flex cursor-pointer items-center gap-2.5
+                      rounded-lg px-2.5 py-2
+                      focus:bg-muted
+                    "
                   >
-                    <Plus className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-semibold text-foreground leading-snug">
+                    <div
+                      className="
+                        flex h-8 w-8 shrink-0 items-center justify-center
+                        rounded-md border border-dashed border-border
+                        bg-background
+                        transition-colors
+                        group-hover/create:border-primary/30
+                        group-hover/create:bg-primary/5
+                      "
+                    >
+                      <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover/create:text-primary" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-medium text-foreground">
                         Create organization
-                      </span>
-                      <span className="text-[11px] text-muted-foreground leading-snug">
+                      </div>
+
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">
                         Collaborate in a shared workspace
-                      </span>
+                      </div>
                     </div>
                   </DropdownMenuItem>
                 </DropdownMenuContent>

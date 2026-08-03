@@ -173,9 +173,12 @@ export default function Webhooks() {
       className="w-full min-w-0"
     >
       <div className="w-full space-y-6">
-      {/* Page Title */}
-      <div>
+      {/* Header */}
+      <div className="flex flex-col gap-1 pb-2 border-b border-border/70">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Webhooks</h1>
+        <p className="text-xs text-muted-foreground mt-1">
+          Configure external endpoints to receive real-time event payloads and task updates.
+        </p>
       </div>
 
       {/* Top Documentation Banner */}

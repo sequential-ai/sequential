@@ -328,11 +328,15 @@ const createOrganization = async (req, res) => {
                     const email = typeof inv === 'string' ? inv : inv.email;
                     const role = typeof inv === 'object' && inv.role ? inv.role : 'VIEWER';
                     if (email && email.trim()) {
+                        const upperRole = String(role || 'VIEWER').toUpperCase().trim();
+                        const validRoles = ['ADMIN', 'DEVELOPER', 'ANALYST', 'BILLING', 'VIEWER'];
+                        const normalizedRole = validRoles.includes(upperRole) ? upperRole : (upperRole === 'MEMBER' ? 'DEVELOPER' : 'VIEWER');
+
                         await tx.organizationInvite.create({
                             data: {
                                 organizationId: org.id,
                                 email: email.trim().toLowerCase(),
-                                role: role === 'Admin' ? 'ADMIN' : (role === 'Developer' ? 'DEVELOPER' : 'VIEWER'),
+                                role: normalizedRole,
                                 token: crypto.randomBytes(32).toString('hex'),
                                 invitedByUserId: user.id,
                                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)

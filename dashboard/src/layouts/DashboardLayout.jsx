@@ -36,7 +36,12 @@ export default function DashboardLayout() {
         fallback={<DashboardLayoutFallback />}
         className={cn("w-full min-w-0", isPlayground && "h-full flex-1 flex flex-col")}
       >
-        <div className={cn("w-full min-w-0", isPlayground ? "h-full flex-1 flex flex-col min-h-0" : "space-y-6 animate-fade-in")}>
+        <div className={cn(
+          "w-full min-w-0", 
+          isPlayground 
+            ? "h-full flex-1 flex flex-col min-h-0" 
+            : "max-w-6xl mx-auto space-y-6 animate-fade-in"
+        )}>
           <Outlet />
         </div>
       </Skeleton>

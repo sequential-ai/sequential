@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Dialog,
   DialogContent,
@@ -54,6 +53,37 @@ import {
   Filter,
 } from 'lucide-react'
 
+const roleStyles = {
+  OWNER:
+    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
+
+  ADMIN:
+    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
+
+  DEVELOPER:
+    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
+
+  ANALYST:
+    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
+
+  VIEWER:
+    "bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-400 dark:border-white/10",
+
+  BILLING:
+    "bg-neutral-100 text-neutral-700 border-neutral-200 dark:bg-white/[0.06] dark:text-neutral-300 dark:border-white/10",
+}
+
+const statusStyles = {
+  ACTIVE:
+    "bg-emerald-50 text-emerald-700 border-emerald-200/70 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+
+  PENDING:
+    "bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+
+  SUSPENDED:
+    "bg-red-50 text-red-700 border-red-200/70 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+}
+
 const ROLE_DESCRIPTIONS = {
   OWNER: 'Full ownership of workspace, billing, memberships, and API governance.',
   ADMIN: 'Manage members, billing, credit refills, API keys, and workspace settings.',
@@ -88,14 +118,8 @@ function TeamFallback() {
         </div>
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="flex items-center justify-between py-3 border-b border-border/20 last:border-0">
-            <div className="flex items-center gap-3">
-              <UiSkeleton className="h-10 w-10 rounded-full" />
-              <div className="space-y-1.5">
-                <UiSkeleton className="h-4 w-32 rounded" />
-                <UiSkeleton className="h-3 w-48 rounded" />
-              </div>
-            </div>
-            <UiSkeleton className="h-6 w-20 rounded-full" />
+            <UiSkeleton className="h-4 w-48 rounded" />
+            <UiSkeleton className="h-6 w-20 rounded-md" />
           </div>
         ))}
       </div>
@@ -257,7 +281,6 @@ export default function Team() {
       // Search query filter
       const matchesSearch =
         searchQuery === '' ||
-        m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.role?.toLowerCase().includes(searchQuery.toLowerCase())
 
@@ -360,7 +383,7 @@ export default function Team() {
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search by name, email, or role..."
+              placeholder="Search by email or role..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 h-8 text-xs rounded-lg bg-card border-border/80"
@@ -537,7 +560,7 @@ export default function Team() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/20 uppercase text-muted-foreground font-medium text-[10px]">
-                    <th className="py-2.5 px-4 font-mono font-semibold">User</th>
+                    <th className="py-2.5 px-4 font-mono font-semibold">Email</th>
                     <th className="py-2.5 px-4 font-mono font-semibold">Role</th>
                     <th className="py-2.5 px-4 font-mono font-semibold">Status</th>
                     <th className="py-2.5 px-4 font-mono font-semibold">Joined / Invited</th>
@@ -559,26 +582,15 @@ export default function Team() {
                           isInvited ? 'bg-muted/10 hover:bg-muted/20' : 'hover:bg-muted/30'
                         }`}
                       >
-                        {/* User column */}
+                        {/* Email column */}
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar className="h-8 w-8 rounded-lg border border-border/60">
-                              <AvatarImage src={m.avatar} alt={m.name} />
-                              <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-bold">
-                                {m.name ? m.name.substring(0, 2).toUpperCase() : 'TM'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-foreground text-xs">{m.name}</span>
-                                {isCurrentUser && (
-                                  <span className="px-1.5 py-0 rounded text-[9px] font-mono font-bold bg-primary/15 text-primary border border-primary/20">
-                                    You
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-muted-foreground font-mono">{m.email}</span>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-foreground font-medium">{m.email}</span>
+                            {isCurrentUser && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-primary/10 text-primary border border-primary/20">
+                                You
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -587,7 +599,9 @@ export default function Team() {
                           {isOwner ? (
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-mono px-2 py-0.5 border-primary/40 text-primary bg-primary/5 font-semibold"
+                              className={`text-[10px] font-mono px-2 py-0.5 font-semibold ${
+                                roleStyles[m.role] || roleStyles.OWNER
+                              }`}
                             >
                               OWNER
                             </Badge>
@@ -600,14 +614,8 @@ export default function Team() {
                                 >
                                   <Badge
                                     variant="outline"
-                                    className={`text-[10px] font-mono px-2 py-0.5 hover:opacity-80 transition-opacity ${
-                                      m.role === 'ADMIN'
-                                        ? 'border-violet-500/40 text-violet-400 bg-violet-500/5'
-                                        : m.role === 'DEVELOPER'
-                                        ? 'border-cyan-500/40 text-cyan-400 bg-cyan-500/5'
-                                        : m.role === 'ANALYST'
-                                        ? 'border-amber-500/40 text-amber-400 bg-amber-500/5'
-                                        : 'border-border text-muted-foreground'
+                                    className={`text-[10px] font-mono px-2 py-0.5 hover:opacity-80 transition-opacity font-medium ${
+                                      roleStyles[m.role] || roleStyles.VIEWER
                                     }`}
                                   >
                                     {m.role}
@@ -650,15 +658,21 @@ export default function Team() {
                         {/* Status column */}
                         <td className="py-3 px-4">
                           {isInvited ? (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-amber-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                              INVITED (Pending)
-                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-mono font-medium px-2 py-0.5 ${statusStyles.PENDING}`}
+                            >
+                              PENDING
+                            </Badge>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                              ACTIVE
-                            </span>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-mono font-medium px-2 py-0.5 ${
+                                statusStyles[m.status] || statusStyles.ACTIVE
+                              }`}
+                            >
+                              {m.status || 'ACTIVE'}
+                            </Badge>
                           )}
                         </td>
 
@@ -870,8 +884,8 @@ export default function Team() {
             </DialogTitle>
             <DialogDescription className="text-xs">
               Are you sure you want to remove{' '}
-              <span className="font-semibold text-foreground">
-                {memberToRemove?.name} ({memberToRemove?.email})
+              <span className="font-semibold text-foreground font-mono">
+                {memberToRemove?.email}
               </span>{' '}
               from <span className="font-semibold text-foreground">{org?.name || 'this workspace'}</span>?
               {!memberToRemove?.isInvite &&

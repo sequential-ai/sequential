@@ -1,14 +1,14 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext({
-  theme: 'light',
+  theme: 'dark',
   toggle: () => {},
   setTheme: () => {},
 })
 
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => {
-    return localStorage.getItem('seq-theme') || 'light'
+    return localStorage.getItem('seq-theme') || 'dark'
   })
 
   useEffect(() => {
@@ -36,3 +36,4 @@ export function ThemeProvider({ children }) {
 }
 
 export const useTheme = () => useContext(ThemeContext)
+

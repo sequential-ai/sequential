@@ -291,9 +291,12 @@ export default function Billing() {
       className="w-full min-w-0"
     >
       <div className="w-full space-y-6">
-      {/* Page Title */}
-      <div>
+      {/* Header */}
+      <div className="flex flex-col gap-1 pb-2">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Billing</h1>
+        <p className="text-xs text-muted-foreground mt-1">
+          Manage your subscription, workspace credits, and payment methods.
+        </p>
       </div>
 
       {/* Tabs Row */}

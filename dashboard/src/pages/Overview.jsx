@@ -16,6 +16,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from "@/lib/utils";
 import {
   Sparkles,
   Plus,
@@ -40,7 +41,11 @@ import {
   ShieldCheck,
   Webhook,
   ExternalLink,
+  Database,
+  ChevronRight,
 } from 'lucide-react'
+import { ListTodo } from 'lucide-react'
+import { Crosshair } from 'lucide-react'
 
 // Compact Barcode / Segmented Vertical Bar Indicator Component
 function BarcodeIndicator({ total = 20, filled = 15, color = 'bg-primary', trackColor = 'bg-black/5 dark:bg-white/5' }) {
@@ -56,6 +61,26 @@ function BarcodeIndicator({ total = 20, filled = 15, color = 'bg-primary', track
     </div>
   )
 }
+const playgroundItems = [
+  {
+    title: "Task API",
+    description: "Run agents & execute prompts",
+    icon: ListTodo,
+    href: "/dashboard/playground",
+  },
+  {
+    title: "Monitor",
+    description: "Telemetry & execution logs",
+    icon: Crosshair,
+    href: "/dashboard/monitor",
+  },
+  {
+    title: "Memory",
+    description: "Context & vector storage",
+    icon: Database,
+    href: "/dashboard/memory",
+  },
+];
 
 const MONTHLY_DATA = [
   { month: 'JAN', value: 180, formatted: '$180K', tokens: '14.2M' },
@@ -316,145 +341,225 @@ export default function Overview() {
         </Card>
       </div>
 
-      {/* Main Analytics Card & Quick Runner */}
-      <div className="space-y-4">
-        <Card className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs space-y-4">
-          {/* Chart Header */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-            <div className="space-y-0.5">
-              <span className="text-[11px] font-semibold text-muted-foreground">Net Revenue / Credit Spend</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight font-sans">
-                  $640,000.00
-                </span>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-0.5">
-                  ↗ +8.2% <span className="font-normal text-muted-foreground text-[10px]">vs last month</span>
+      {/* Main Analytics Card & Quick Runner & Explore */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Left Column (Chart & Quick Prompt) */}
+        <div className="lg:col-span-2 space-y-4">
+          <Card className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-2xs space-y-4 min-w-0 w-full overflow-hidden">
+            {/* Chart Header */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">Net Revenue / Credit Spend</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight font-sans">
+                    $640,000.00
+                  </span>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-0.5">
+                    ↗ +8.2% <span className="font-normal text-muted-foreground text-[10px]">vs last month</span>
+                  </span>
+                </div>
+
+                {/* Sub Metrics */}
+                <div className="flex flex-wrap items-center gap-5 pt-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">Peak Month</span>
+                    <span className="font-bold text-foreground text-[11px]">AUG $640K</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">Monthly Avg</span>
+                    <span className="font-bold text-foreground text-[11px]">$232K</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">YTD Volume</span>
+                    <span className="font-bold text-foreground text-[11px]">348.6M tokens</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric Filter Dropdown */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={metricFilter}
+                  onChange={(e) => setMetricFilter(e.target.value)}
+                  className="h-7 rounded-lg border border-border/80 bg-background px-2.5 text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
+                >
+                  <option value="Net Revenue">Net Revenue</option>
+                  <option value="Token Volume">Token Volume</option>
+                  <option value="Worker Hours">Worker Hours</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Compact Stylized Bar Chart */}
+            <div className="relative pt-4 pb-1">
+              {/* Dashed Horizontal Peak Reference Line */}
+              <div className="absolute top-7 left-0 right-0 border-b border-dashed border-border/80 flex items-center justify-start pointer-events-none">
+                <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded-sm bg-foreground text-background -translate-y-1/2">
+                  $640K
                 </span>
               </div>
 
-              {/* Sub Metrics */}
-              <div className="flex flex-wrap items-center gap-5 pt-2 text-xs">
-                <div>
-                  <span className="text-[10px] text-muted-foreground block">Peak Month</span>
-                  <span className="font-bold text-foreground text-[11px]">AUG $640K</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-muted-foreground block">Monthly Avg</span>
-                  <span className="font-bold text-foreground text-[11px]">$232K</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-muted-foreground block">YTD Volume</span>
-                  <span className="font-bold text-foreground text-[11px]">348.6M tokens</span>
-                </div>
-              </div>
-            </div>
+              {/* Bars */}
+              <div className="grid grid-cols-12 gap-1.5 sm:gap-2.5 items-end h-44 pt-6">
+                {MONTHLY_DATA.map((item) => {
+                  const heightPercentage = Math.round((item.value / 640) * 100)
+                  const isSelected = selectedMonth === item.month
 
-            {/* Metric Filter Dropdown */}
-            <div className="flex items-center gap-2">
-              <select
-                value={metricFilter}
-                onChange={(e) => setMetricFilter(e.target.value)}
-                className="h-7 rounded-lg border border-border/80 bg-background px-2.5 text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
-              >
-                <option value="Net Revenue">Net Revenue</option>
-                <option value="Token Volume">Token Volume</option>
-                <option value="Worker Hours">Worker Hours</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Compact Stylized Bar Chart */}
-          <div className="relative pt-4 pb-1">
-            {/* Dashed Horizontal Peak Reference Line */}
-            <div className="absolute top-7 left-0 right-0 border-b border-dashed border-border/80 flex items-center justify-start pointer-events-none">
-              <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded-sm bg-foreground text-background -translate-y-1/2">
-                $640K
-              </span>
-            </div>
-
-            {/* Bars */}
-            <div className="grid grid-cols-12 gap-1.5 sm:gap-2.5 items-end h-44 pt-6">
-              {MONTHLY_DATA.map((item) => {
-                const heightPercentage = Math.round((item.value / 640) * 100)
-                const isSelected = selectedMonth === item.month
-
-                return (
-                  <div
-                    key={item.month}
-                    onClick={() => setSelectedMonth(item.month)}
-                    className="flex flex-col items-center gap-1.5 group cursor-pointer h-full justify-end"
-                  >
-                    {/* Tooltip */}
+                  return (
                     <div
-                      className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md transition-all ${isSelected || item.isPeak
-                          ? 'bg-primary text-white scale-100 opacity-100'
-                          : 'opacity-0 group-hover:opacity-100 bg-foreground text-background'
-                        }`}
+                      key={item.month}
+                      onClick={() => setSelectedMonth(item.month)}
+                      className="flex flex-col items-center gap-1.5 group cursor-pointer h-full justify-end"
                     >
-                      {metricFilter === 'Token Volume' ? item.tokens : item.formatted}
-                    </div>
-
-                    {/* Bar Pill */}
-                    <div className="w-full bg-muted/40 rounded-t-md relative flex flex-col justify-end overflow-hidden h-full max-w-[36px]">
+                      {/* Tooltip */}
                       <div
-                        style={{ height: `${heightPercentage}%` }}
-                        className={`w-full rounded-t-md transition-all duration-300 ${item.isPeak
-                            ? 'bg-primary shadow-xs'
-                            : isSelected
-                              ? 'bg-primary/80'
-                              : 'bg-primary/25 group-hover:bg-primary/45'
+                        className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md transition-all ${isSelected || item.isPeak
+                            ? 'bg-primary text-white scale-100 opacity-100'
+                            : 'opacity-0 group-hover:opacity-100 bg-foreground text-background'
                           }`}
                       >
-                        {!item.isPeak && (
-                          <div className="w-full h-full opacity-35 bg-[linear-gradient(45deg,rgba(0,0,0,0.06)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.06)_50%,rgba(0,0,0,0.06)_75%,transparent_75%,transparent)] bg-[length:6px_6px]" />
-                        )}
+                        {metricFilter === 'Token Volume' ? item.tokens : item.formatted}
                       </div>
+
+                      {/* Bar Pill */}
+                      <div className="w-full bg-muted/40 rounded-t-md relative flex flex-col justify-end overflow-hidden h-full max-w-[36px]">
+                        <div
+                          style={{ height: `${heightPercentage}%` }}
+                          className={`w-full rounded-t-md transition-all duration-300 ${item.isPeak
+                              ? 'bg-primary shadow-xs'
+                              : isSelected
+                                ? 'bg-primary/80'
+                                : 'bg-primary/25 group-hover:bg-primary/45'
+                            }`}
+                        >
+                          {!item.isPeak && (
+                            <div className="w-full h-full opacity-35 bg-[linear-gradient(45deg,rgba(0,0,0,0.06)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.06)_50%,rgba(0,0,0,0.06)_75%,transparent_75%,transparent)] bg-[length:6px_6px]" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Month Label */}
+                      <span
+                        className={`text-[10px] font-mono font-medium transition-colors ${isSelected || item.isPeak
+                            ? 'text-primary font-bold'
+                            : 'text-muted-foreground group-hover:text-foreground'
+                          }`}
+                      >
+                        {item.month}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </Card>
+
+          {/* Quick Prompt Command Bar */}
+          <Card className="rounded-xl border border-border/80 bg-card p-3 shadow-2xs">
+            <form onSubmit={handleQuickRun} className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <Sparkles className="h-3.5 w-3.5" />
+              </div>
+              <Input
+                placeholder="Quick Task: Run market analysis, code audit, or research query..."
+                value={quickPrompt}
+                onChange={(e) => setQuickPrompt(e.target.value)}
+                className="h-8 text-xs bg-muted/30 border-border/70 rounded-lg flex-1"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!quickPrompt.trim() || isExecutingQuick}
+                className="rounded h-8 px-3 text-xs font-bold text-white shadow-xs flex items-center gap-1 font-mono shrink-0"
+                style={{ background: 'var(--primary, #F2541B)' }}
+              >
+                {isExecutingQuick ? (
+                  <RotateCw className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Play className="h-3 w-3 fill-current" />
+                )}
+                Run
+              </Button>
+            </form>
+          </Card>
+        </div>
+
+          {/* Right Column — Explore */}
+          <div className="lg:col-span-1 flex flex-col">
+            {/* Header */}
+            <div className="mb-3">
+              <h3 className="text-[15px] font-semibold text-foreground tracking-tight">
+                Explore
+              </h3>
+
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Quick access to workspace tools
+              </p>
+            </div>
+
+            {/* Navigation Panel */}
+            <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+              {playgroundItems.map((item, index) => {
+                const Icon = item.icon;
+                const isLast = index === playgroundItems.length - 1;
+
+                return (
+                  <button
+                    key={item.title}
+                    type="button"
+                    onClick={() => navigate(item.href)}
+                    className={cn(
+                      "group flex w-full items-center gap-3",
+                      "px-3.5 py-3 text-left",
+                      "transition-colors duration-150",
+                      "hover:bg-black/[0.025]",
+                      "dark:hover:bg-white/[0.035]",
+                      !isLast && "border-b border-border/60"
+                    )}
+                  >
+                    {/* Icon */}
+                    <div
+                      className="
+              flex h-9 w-9 shrink-0
+              items-center justify-center
+              rounded-lg
+              bg-black/[0.04]
+              text-foreground/60
+              transition-colors
+              dark:bg-white/[0.06]
+              group-hover:bg-primary/10
+              group-hover:text-primary
+            "
+                    >
+                      <Icon className="h-[17px] w-[17px] stroke-[1.6]" />
                     </div>
 
-                    {/* Month Label */}
-                    <span
-                      className={`text-[10px] font-mono font-medium transition-colors ${isSelected || item.isPeak
-                          ? 'text-primary font-bold'
-                          : 'text-muted-foreground group-hover:text-foreground'
-                        }`}
-                    >
-                      {item.month}
-                    </span>
-                  </div>
-                )
+                    {/* Content */}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-semibold text-foreground">
+                        {item.title}
+                      </div>
+
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    {/* Arrow */}
+                    <ChevronRight
+                      className="
+              h-4 w-4 shrink-0
+              text-muted-foreground/30
+              transition-all duration-150
+              group-hover:translate-x-0.5
+              group-hover:text-primary
+            "
+                    />
+                  </button>
+                );
               })}
             </div>
           </div>
-        </Card>
-
-        {/* Quick Prompt Command Bar */}
-        <Card className="rounded-xl border border-border/80 bg-card p-3 shadow-2xs">
-          <form onSubmit={handleQuickRun} className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <Sparkles className="h-3.5 w-3.5" />
-            </div>
-            <Input
-              placeholder="Quick Task: Run market analysis, code audit, or research query..."
-              value={quickPrompt}
-              onChange={(e) => setQuickPrompt(e.target.value)}
-              className="h-8 text-xs bg-muted/30 border-border/70 rounded-lg flex-1"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={!quickPrompt.trim() || isExecutingQuick}
-              className="rounded h-8 px-3 text-xs font-bold text-white shadow-xs flex items-center gap-1 font-mono shrink-0"
-              style={{ background: 'var(--primary, #F2541B)' }}
-            >
-              {isExecutingQuick ? (
-                <RotateCw className="h-3 w-3 animate-spin" />
-              ) : (
-                <Play className="h-3 w-3 fill-current" />
-              )}
-              Run
-            </Button>
-          </form>
-        </Card>
       </div>
 
       {/* Operational Intelligence (3 Useful Modular Panels) */}

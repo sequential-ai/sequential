@@ -894,14 +894,14 @@ run();`
                                             </Badge>
                                         </div>
 
-                                        <a
-                                            href="https://docs.sequential.ai"
+                                        <Link
+                                            to="https://docs.sequential.ai"
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors shadow-xs"
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-mono font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors shadow-xs"
                                         >
                                             Docs <ExternalLink className="h-3 w-3 text-zinc-400" />
-                                        </a>
+                                        </Link>
                                     </div>
 
                                     <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">

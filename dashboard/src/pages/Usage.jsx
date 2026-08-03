@@ -324,9 +324,14 @@ export default function Usage() {
       className="w-full min-w-0"
     >
       <div className="w-full max-w-full min-w-0 space-y-4">
-      {/* Top Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Usage</h1>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-border/70">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Usage & Analytics</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Monitor API consumption, review execution telemetry, and track compute costs across pipelines.
+          </p>
+        </div>
       </div>
 
       {/* Filter Toolbar (Matching Reference Layout) */}
