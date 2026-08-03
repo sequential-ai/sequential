@@ -1,4 +1,8 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Skeleton } from 'boneyard-js/react'
+import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +16,6 @@ import {
   CheckCircle2,
   Clock,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 
 const INITIAL_NOTIFICATIONS = [
   {
@@ -53,7 +56,43 @@ const INITIAL_NOTIFICATIONS = [
   },
 ]
 
+function NotificationsFallback() {
+  return (
+    <div className="space-y-5 p-1">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1.5">
+          <UiSkeleton className="h-7 w-36 rounded-lg" />
+          <UiSkeleton className="h-4 w-64 rounded-md" />
+        </div>
+        <UiSkeleton className="h-8 w-32 rounded-lg" />
+      </div>
+      <div className="p-4 rounded-xl border border-border/80 bg-card space-y-4">
+        <div className="flex justify-between items-center pb-3 border-b border-border/40">
+          <div className="flex gap-2">
+            <UiSkeleton className="h-6 w-20 rounded-md" />
+            <UiSkeleton className="h-6 w-20 rounded-md" />
+          </div>
+          <UiSkeleton className="h-5 w-16 rounded-full" />
+        </div>
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex items-center justify-between py-3 border-b border-border/20 last:border-0">
+            <div className="flex items-center gap-3">
+              <UiSkeleton className="h-8 w-8 rounded-lg" />
+              <div className="space-y-1.5">
+                <UiSkeleton className="h-4 w-48 rounded" />
+                <UiSkeleton className="h-3 w-80 rounded" />
+              </div>
+            </div>
+            <UiSkeleton className="h-6 w-12 rounded-md" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Notifications() {
+  const { isSyncing } = useAuth()
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS)
   const [filter, setFilter] = useState('ALL')
 
@@ -67,7 +106,13 @@ export default function Notifications() {
   })
 
   return (
-    <div className="space-y-5">
+    <Skeleton
+      name="notifications-page"
+      loading={isSyncing}
+      fallback={<NotificationsFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -170,5 +215,6 @@ export default function Notifications() {
         </CardContent>
       </Card>
     </div>
+    </Skeleton>
   )
 }

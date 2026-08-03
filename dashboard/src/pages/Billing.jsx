@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { Skeleton } from 'boneyard-js/react'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/context/AuthContext'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -161,8 +163,34 @@ function VirtualCreditCard({ card, onRemove, onSetDefault }) {
   )
 }
 
+function BillingFallback() {
+  return (
+    <div className="w-full space-y-6 p-1">
+      <UiSkeleton className="h-8 w-28 rounded-lg" />
+      <div className="flex gap-6 border-b border-border/80 pb-2">
+        <UiSkeleton className="h-4 w-20 rounded" />
+        <UiSkeleton className="h-4 w-28 rounded" />
+        <UiSkeleton className="h-4 w-24 rounded" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-6 rounded-2xl border border-border/80 bg-card space-y-4">
+          <UiSkeleton className="h-5 w-32 rounded" />
+          <UiSkeleton className="h-8 w-24 rounded-lg" />
+          <UiSkeleton className="h-9 w-32 rounded-lg" />
+        </div>
+        <div className="p-6 rounded-2xl border border-border/80 bg-card space-y-4">
+          <UiSkeleton className="h-5 w-32 rounded" />
+          <UiSkeleton className="h-4 w-64 rounded" />
+          <UiSkeleton className="h-9 w-36 rounded-lg" />
+        </div>
+      </div>
+      <UiSkeleton className="h-48 w-full rounded-2xl" />
+    </div>
+  )
+}
+
 export default function Billing() {
-  const { org } = useAuth()
+  const { org, isSyncing } = useAuth()
   const orgName = org?.name || 'Gmail'
 
   // Tab State: 'overview' | 'payment_methods' | 'billing_history'
@@ -256,7 +284,13 @@ export default function Billing() {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <Skeleton
+      name="billing-page"
+      loading={isSyncing}
+      fallback={<BillingFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="w-full space-y-6">
       {/* Page Title */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Billing</h1>
@@ -839,5 +873,6 @@ export default function Billing() {
         </DialogContent>
       </Dialog>
     </div>
+    </Skeleton>
   )
 }

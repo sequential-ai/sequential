@@ -9,6 +9,7 @@ const app = express();
 const authRoutes = require("./src/routes/v1/auth.routes");
 const tasksRoutes = require("./src/routes/v1/tasks.routes");
 const apikeysRoutes = require("./src/routes/v1/apikeys.routes");
+const organizationsRoutes = require("./src/routes/v1/organizations.routes");
 app.use(express.json());
 app.use(cors());
 
@@ -16,6 +17,7 @@ app.use(cors());
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/tasks", tasksRoutes);
 app.use("/api/v1/apikeys", apikeysRoutes);
+app.use("/api/v1/organizations", organizationsRoutes);
 app.get("/", (req, res) => {
     res.json({
         message: "success",

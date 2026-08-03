@@ -101,7 +101,7 @@ export const sidebarSections = [
 ];
 
 const SequentialAppSidebar = ({ children }) => {
-  const { org, credits, refreshProfile, dbUser } = useAuth();
+  const { org, credits, refreshProfile, dbUser, memberships, switchOrganization } = useAuth();
   const { user } = useUser();
   const { signOut } = useClerk();
   const { theme, setTheme } = useTheme();
@@ -127,10 +127,7 @@ const SequentialAppSidebar = ({ children }) => {
 
   const handleCreateOrg = (e) => {
     e.preventDefault();
-    if (!newOrgName.trim()) return;
-    setIsCreateOrgOpen(false);
-    setNewOrgName("");
-    navigate("/dashboard/settings");
+    navigate("/onboard");
   };
 
   return (
@@ -158,7 +155,7 @@ const SequentialAppSidebar = ({ children }) => {
                       <span className="text-sm font-semibold text-foreground truncate">
                         {orgName}
                       </span>
-                      <span className="text-[10px] text-primary dark:text-sky-400 font-medium  rounded leading-none">
+                      <span className="text-[10px] text-sky-500 dark:text-sky-400 font-medium rounded leading-none">
                         Admin
                       </span>
                     </div>
@@ -174,27 +171,53 @@ const SequentialAppSidebar = ({ children }) => {
                   sideOffset={6}
                   className="w-64 p-1.5 rounded-2xl border border-border shadow-xl bg-card text-card-foreground overflow-hidden"
                 >
-                  {/* Current Active Org */}
-                  <DropdownMenuItem
-                    className="p-2.5 rounded-xl flex items-center justify-between cursor-pointer focus:bg-muted/60"
-                    onClick={() => navigate("/dashboard/settings")}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-semibold text-foreground truncate">
-                        {orgName}
-                      </span>
-                      <span className="text-xs bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 font-medium px-2 py-0.5 rounded-md border border-sky-100 dark:border-sky-900/40">
-                        Admin
-                      </span>
-                    </div>
-                    <Check className="h-4 w-4 text-foreground shrink-0 ml-2" />
-                  </DropdownMenuItem>
+                  {/* Current and other orgs */}
+                  {memberships && memberships.length > 0 ? (
+                    memberships.map((m) => {
+                      const mOrg = m.organization;
+                      const isActive = mOrg?.id === org?.id;
+                      return (
+                        <DropdownMenuItem
+                          key={m.id || mOrg?.id}
+                          className="p-2.5 rounded-xl flex items-center justify-between cursor-pointer focus:bg-muted/60"
+                          onClick={() => {
+                            if (mOrg?.id) switchOrganization(mOrg.id);
+                          }}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold text-foreground truncate">
+                              {mOrg?.name || "Workspace"}
+                            </span>
+                            <span className="text-xs bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 font-medium px-2 py-0.5 rounded-md border border-sky-100 dark:border-sky-900/40">
+                              {m.role === 'OWNER' || m.role === 'ADMIN' ? 'Admin' : m.role}
+                            </span>
+                          </div>
+                          {isActive && <Check className="h-4 w-4 text-foreground shrink-0 ml-2" />}
+                        </DropdownMenuItem>
+                      );
+                    })
+                  ) : (
+                    <DropdownMenuItem
+                      className="p-2.5 rounded-xl flex items-center justify-between cursor-pointer focus:bg-muted/60"
+                      onClick={() => navigate("/dashboard/settings")}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-semibold text-foreground truncate">
+                          {orgName}
+                        </span>
+                        <span className="text-xs bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 font-medium px-2 py-0.5 rounded-md border border-sky-100 dark:border-sky-900/40">
+                          Admin
+                        </span>
+                      </div>
+                      <Check className="h-4 w-4 text-foreground shrink-0 ml-2" />
+                    </DropdownMenuItem>
+                  )}
 
                   <DropdownMenuSeparator className="my-1 bg-border/80" />
 
                   {/* Create Organization item */}
                   <DropdownMenuItem
-                    onClick={() => setIsCreateOrgOpen(true)}
+                    onClick={() => navigate("/onboard")}
                     className="p-2.5 rounded-xl flex items-start gap-2.5 cursor-pointer focus:bg-muted/60"
                   >
                     <Plus className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />

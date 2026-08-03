@@ -19,11 +19,12 @@ export const api = {
   login: (clerkUserId) => client.post('/auth/login', { clerkUserId }),
   register: (payload) => client.post('/auth/register', payload),
   getProfile: () => client.get('/auth/me'),
+  createOrganization: (payload) => client.post('/auth/organization', payload),
 
   // API Keys
   getApiKeys: () => client.get('/apikeys'),
   createApiKey: (payload) => client.post('/apikeys', payload),
-  toggleApiKey: (id) => client.patch(`/apikeys/${id}/toggle`),
+  toggleApiKey: (id, data) => client.patch(`/apikeys/${id}/toggle`, data),
   deleteApiKey: (id) => client.delete(`/apikeys/${id}`),
 
   // Tasks
@@ -33,6 +34,13 @@ export const api = {
   getTaskStatus: (id, apiKey) => client.get(`/tasks/${id}`, {
     headers: apiKey ? { 'x-api-key': apiKey } : {}
   }),
+
+  // Organization & Team Members
+  getMembers: (orgId = 'active') => client.get(`/organizations/${orgId}/members`),
+  addMember: (orgId = 'active', payload) => client.post(`/organizations/${orgId}/members`, payload),
+  updateMemberRole: (orgId = 'active', memberId, role) => client.patch(`/organizations/${orgId}/members/${memberId}`, { role }),
+  removeMember: (orgId = 'active', memberId) => client.delete(`/organizations/${orgId}/members/${memberId}`),
+  cancelInvite: (orgId = 'active', inviteId) => client.delete(`/organizations/${orgId}/invites/${inviteId}`),
 }
 
 export default client

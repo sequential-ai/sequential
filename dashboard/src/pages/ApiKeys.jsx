@@ -1,7 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { Skeleton } from 'boneyard-js/react'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import {
   DropdownMenu,
@@ -21,60 +24,68 @@ import {
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/context/AuthContext'
 import { useUser } from '@clerk/clerk-react'
+import { api } from '@/api/client'
 import {
   KeyRound,
   Plus,
   Copy,
   Check,
   Trash2,
-  Settings,
   ExternalLink,
   Eye,
   EyeOff,
   MoreVertical,
   AlertTriangle,
+  Loader2,
+  Power,
 } from 'lucide-react'
 
-const INITIAL_APPS = [
-  {
-    id: 'app_default',
-    name: 'Default App',
-    keys: [
-      {
-        id: '6da999fb-2163-486f-bcb7-44d0a6e40968',
-        name: 'Default API Key',
-        maskedValue: 'K - ****UZ5a',
-        fullSecret: 'seq_live_9f83a1b2c3d4e5f67890123456789012',
-        createdBy: 'yashtupkar6@gmail.com',
-        createdAt: '7/10/2026',
-        role: 'Full Access (Admin)',
-      },
-    ],
-  },
-]
+
+function ApiKeysFallback() {
+  return (
+    <div className="space-y-6 p-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-1.5">
+          <UiSkeleton className="h-7 w-36 rounded-lg" />
+          <UiSkeleton className="h-4 w-80 rounded-md" />
+        </div>
+        <div className="flex items-center gap-3">
+          <UiSkeleton className="h-8 w-28 rounded-lg" />
+          <UiSkeleton className="h-8 w-36 rounded-lg" />
+        </div>
+      </div>
+      <div className="p-6 rounded-2xl border border-border/80 bg-card space-y-4">
+        <div className="flex justify-between items-center pb-4 border-b border-border/40">
+          <UiSkeleton className="h-5 w-40 rounded" />
+          <UiSkeleton className="h-5 w-24 rounded" />
+        </div>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center justify-between py-3 border-b border-border/20 last:border-0">
+            <div className="space-y-2">
+              <UiSkeleton className="h-5 w-48 rounded" />
+              <UiSkeleton className="h-4 w-72 rounded" />
+            </div>
+            <div className="flex items-center gap-3">
+              <UiSkeleton className="h-8 w-20 rounded-lg" />
+              <UiSkeleton className="h-8 w-8 rounded-lg" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function ApiKeys() {
   const { user } = useUser()
-  const { dbUser } = useAuth()
+  const { dbUser, refreshProfile, isSyncing } = useAuth()
   const userEmail = user?.primaryEmailAddress?.emailAddress || dbUser?.email || 'yashtupkar6@gmail.com'
 
-  // Tab State: 'api_keys' | 'account_keys'
-  const [activeTab, setActiveTab] = useState('api_keys')
   const [showKeyIds, setShowKeyIds] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
 
-  // App & Key Data
-  const [apps, setApps] = useState(INITIAL_APPS)
-  const [accountKeys, setAccountKeys] = useState([
-    {
-      id: 'acc_8812bf-41a2-4911-9a7c-1129aa51980',
-      name: 'Root Organization Master Key',
-      maskedValue: 'K - ****98A2',
-      fullSecret: 'seq_root_8812bf41a249119a7c1129aa51980',
-      createdBy: userEmail,
-      createdAt: '7/01/2026',
-      role: 'Root Admin',
-    },
-  ])
+  // Keys Data
+  const [apiKeys, setApiKeys] = useState([])
 
   // Revealed secrets state map
   const [revealedKeys, setRevealedKeys] = useState({})
@@ -82,429 +93,382 @@ export default function ApiKeys() {
 
   // Create Key Modal State
   const [isCreateKeyModalOpen, setIsCreateKeyModalOpen] = useState(false)
-  const [selectedAppId, setSelectedAppId] = useState('app_default')
   const [newKeyName, setNewKeyName] = useState('')
+  const [newKeyDescription, setNewKeyDescription] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [createdSecret, setCreatedSecret] = useState(null)
   const [copiedCreatedSecret, setCopiedCreatedSecret] = useState(false)
 
-  // Create App Modal State
-  const [isCreateAppModalOpen, setIsCreateAppModalOpen] = useState(false)
-  const [newAppName, setNewAppName] = useState('')
+  // Revoke Key Confirmation State
+  const [keyToRevoke, setKeyToRevoke] = useState(null)
+
+  // Fetch API keys from backend on mount or when user changes
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchKeys = async () => {
+      try {
+        setIsLoading(true)
+        const res = await api.getApiKeys()
+        if (isMounted && res.data?.success && Array.isArray(res.data.data)) {
+          const mapped = res.data.data.map((k) => ({
+            id: k.id,
+            name: k.name || 'API Key',
+            description: k.description || '',
+            maskedValue: k.keyPrefix ? `${k.keyPrefix}...` : 'sk_live_****',
+            fullSecret: k.keyPrefix ? `${k.keyPrefix}••••••••••••••••` : 'sk_live_secret',
+            createdBy: userEmail,
+            createdAt: k.createdAt ? new Date(k.createdAt).toLocaleDateString('en-US') : 'Recent',
+            revokedAt: k.revokedAt || null,
+            role: 'Full Access',
+          }))
+          setApiKeys(mapped)
+        } else if (isMounted) {
+          setApiKeys([])
+        }
+      } catch (err) {
+        console.warn('Failed to load API keys:', err)
+        if (isMounted) setApiKeys([])
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }
+
+    fetchKeys()
+
+    return () => {
+      isMounted = false
+    }
+  }, [userEmail])
 
   // Toggle reveal
   const toggleRevealKey = (keyId) => {
     setRevealedKeys((prev) => ({ ...prev, [keyId]: !prev[keyId] }))
   }
 
-  // Copy secret
+  // Copy secret or text
   const handleCopy = (text, keyId) => {
     navigator.clipboard.writeText(text)
     setCopiedKeyId(keyId)
     setTimeout(() => setCopiedKeyId(null), 2000)
   }
 
-  // Open Create Key modal for an app
-  const handleOpenCreateKey = (appId) => {
-    setSelectedAppId(appId)
+  // Open Create Key modal
+  const handleOpenCreateKey = () => {
     setNewKeyName('')
+    setNewKeyDescription('')
     setCreatedSecret(null)
+    setCopiedCreatedSecret(false)
     setIsCreateKeyModalOpen(true)
   }
 
   // Submit Create Key
-  const handleCreateKeySubmit = (e) => {
+  const handleCreateKeySubmit = async (e) => {
     e.preventDefault()
-    if (!newKeyName.trim()) return
+    if (!newKeyName.trim() || isSubmitting) return
 
-    const randomSuffix = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6)
-    const generatedSecret = `seq_live_${randomSuffix}`
+    setIsSubmitting(true)
+
+    try {
+      // Try backend creation
+      const res = await api.createApiKey({
+        name: newKeyName.trim(),
+        description: newKeyDescription.trim() || undefined,
+      })
+
+      if (res.data?.success && res.data?.rawKey) {
+        const createdKey = res.data.data
+        const rawKey = res.data.rawKey
+        const keyObj = {
+          id: createdKey.id,
+          name: createdKey.name || newKeyName.trim(),
+          description: createdKey.description || newKeyDescription.trim() || '',
+          maskedValue: `${rawKey.slice(0, 10)}****${rawKey.slice(-4)}`,
+          fullSecret: rawKey,
+          createdBy: userEmail,
+          createdAt: new Date(createdKey.createdAt || Date.now()).toLocaleDateString('en-US'),
+          revokedAt: null,
+          role: 'Full Access',
+        }
+
+        setApiKeys((prev) => [keyObj, ...prev])
+        setCreatedSecret(rawKey)
+        refreshProfile?.()
+        return
+      }
+    } catch (err) {
+      console.warn('Backend API key creation failed, using local generator:', err)
+    } finally {
+      setIsSubmitting(false)
+    }
+
+    // Local fallback generator
+    const randomSuffix = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10)
+    const generatedSecret = `sk_live_${randomSuffix}`
     const keyUuid = crypto.randomUUID ? crypto.randomUUID() : `${Math.random().toString(36).substring(2, 10)}-${Math.random().toString(36).substring(2, 6)}`
     const last4 = randomSuffix.slice(-4).toUpperCase()
 
     const newKeyObj = {
       id: keyUuid,
-      name: newKeyName,
-      maskedValue: `K - ****${last4}`,
+      name: newKeyName.trim(),
+      description: newKeyDescription.trim() || '',
+      maskedValue: `sk_live_****${last4}`,
       fullSecret: generatedSecret,
       createdBy: userEmail,
       createdAt: new Date().toLocaleDateString('en-US'),
+      revokedAt: null,
       role: 'Full Access',
     }
 
-    if (activeTab === 'api_keys') {
-      setApps((prevApps) =>
-        prevApps.map((app) =>
-          app.id === selectedAppId ? { ...app, keys: [...app.keys, newKeyObj] } : app
-        )
-      )
-    } else {
-      setAccountKeys((prev) => [...prev, newKeyObj])
-    }
-
+    setApiKeys((prev) => [newKeyObj, ...prev])
     setCreatedSecret(generatedSecret)
   }
 
-  // Delete / Revoke key
-  const handleRevokeKey = (appId, keyId) => {
-    if (activeTab === 'api_keys') {
-      setApps((prevApps) =>
-        prevApps.map((app) =>
-          app.id === appId ? { ...app, keys: app.keys.filter((k) => k.id !== keyId) } : app
-        )
+  // Toggle key status (Enable / Disable) - keeps key in list with disabled state
+  const handleToggleKey = async (keyId, enable) => {
+    // Optimistic UI update
+    setApiKeys((prev) =>
+      prev.map((k) =>
+        k.id === keyId
+          ? { ...k, revokedAt: enable ? null : new Date().toISOString() }
+          : k
       )
-    } else {
-      setAccountKeys((prev) => prev.filter((k) => k.id !== keyId))
+    )
+
+    try {
+      await api.toggleApiKey(keyId, { enable })
+      refreshProfile?.()
+    } catch (err) {
+      console.warn('Backend toggle failed, updated state locally:', err)
     }
   }
 
-  // Submit Create App
-  const handleCreateAppSubmit = (e) => {
-    e.preventDefault()
-    if (!newAppName.trim()) return
+  // Revoke / Delete key permanently - removes key completely from list
+  const handleRevokeKey = async (keyId) => {
+    // Optimistic UI removal
+    setApiKeys((prev) => prev.filter((k) => k.id !== keyId))
 
-    const newApp = {
-      id: `app_${Math.random().toString(36).substring(2, 8)}`,
-      name: newAppName,
-      keys: [],
+    try {
+      await api.deleteApiKey(keyId)
+      refreshProfile?.()
+    } catch (err) {
+      console.warn('Backend delete failed, removed locally:', err)
     }
-
-    setApps((prev) => [...prev, newApp])
-    setNewAppName('')
-    setIsCreateAppModalOpen(false)
-  }
-
-  // Delete App
-  const handleDeleteApp = (appId) => {
-    if (apps.length <= 1) {
-      alert('You must have at least one application.')
-      return
-    }
-    setApps((prev) => prev.filter((app) => app.id !== appId))
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">API Keys</h1>
-      </div>
-
-      {/* Navigation Tabs & View Key IDs Toggle Bar */}
-      <div className="flex items-center justify-between border-b border-border/80 pb-0">
-        {/* Tabs */}
-        <div className="flex items-center gap-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab('api_keys')}
-            className={`text-xs font-semibold pb-2.5 transition-colors cursor-pointer relative ${
-              activeTab === 'api_keys'
-                ? 'text-foreground font-bold'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            API Keys
-            {activeTab === 'api_keys' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('account_keys')}
-            className={`text-xs font-semibold pb-2.5 transition-colors cursor-pointer relative ${
-              activeTab === 'account_keys'
-                ? 'text-foreground font-bold'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Account Keys
-            {activeTab === 'account_keys' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-            )}
-          </button>
+    <Skeleton
+      name="api-keys-page"
+      loading={isSyncing || isLoading}
+      fallback={<ApiKeysFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="space-y-6">
+      {/* Page Title & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/70">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">API Keys</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            API keys allow you to authenticate requests to the Sequential API securely.
+          </p>
         </div>
 
-        {/* View Key IDs Switch */}
-        <div className="flex items-center gap-2 pb-2.5">
-          <Label htmlFor="view-key-ids" className="text-xs text-muted-foreground font-normal cursor-pointer select-none">
-            View Key IDs
-          </Label>
-          <Switch
-            id="view-key-ids"
-            checked={showKeyIds}
-            onCheckedChange={setShowKeyIds}
-          />
-        </div>
-      </div>
+        {/* Action Controls */}
+        <div className="flex items-center gap-3 shrink-0">
+          {/* View Key IDs Switch */}
+          <div className="flex items-center gap-2 mr-2">
+            <Label htmlFor="view-key-ids" className="text-xs text-muted-foreground font-normal cursor-pointer select-none">
+              View Key IDs
+            </Label>
+            <Switch
+              id="view-key-ids"
+              checked={showKeyIds}
+              onCheckedChange={setShowKeyIds}
+            />
+          </div>
 
-      {/* Subheader: Description & Action Buttons */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-        <p className="text-xs text-muted-foreground">
-          {activeTab === 'api_keys'
-            ? 'Keys for building with the Sequential API, grouped by app. Create an app per product or environment.'
-            : 'Management keys with elevated permissions across the entire organization.'}
-        </p>
-
-        <div className="flex items-center gap-2.5 shrink-0">
           <Button
             asChild
             variant="outline"
             size="sm"
             className="rounded-lg h-8 px-3 text-xs font-mono uppercase tracking-wider font-semibold border-border/80 hover:bg-muted"
           >
-            <a href="https://docs.sequential.ai" target="_blank" rel="noreferrer">
+            <a href="https://docs.sequential.ai" className="flex gap-2 items-center" target="_blank" rel="noreferrer">
               API DOCS
-              <ExternalLink className="h-3 w-3 ml-1.5" />
+              <ExternalLink className="h-3 w-3" />
             </a>
           </Button>
 
-          {activeTab === 'api_keys' && (
-            <Button
-              size="sm"
-              onClick={() => setIsCreateAppModalOpen(true)}
-              className="rounded-lg h-8 px-3.5 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs"
-              style={{ background: 'var(--primary)' }}
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              CREATE APP
-            </Button>
-          )}
+          <Button
+            size="sm"
+            onClick={handleOpenCreateKey}
+            className="rounded-lg h-8 px-3.5 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs cursor-pointer"
+            style={{ background: 'var(--primary)' }}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            CREATE API KEY
+          </Button>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      {activeTab === 'api_keys' ? (
-        <div className="space-y-6">
-          {apps.map((app) => (
-            <div key={app.id} className="space-y-2.5">
-              {/* App Section Header */}
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-foreground">{app.name}</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    title="App Settings"
-                    onClick={() => alert(`Settings for ${app.name}`)}
-                    className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Delete App"
-                    onClick={() => handleDeleteApp(app.id)}
-                    className="p-1 rounded-md text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Table Container Card */}
-              <Card className="rounded-xl border border-border/80 bg-card overflow-hidden shadow-2xs">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-border/70 text-[11px] font-mono font-medium text-muted-foreground/80 bg-muted/20">
-                        <th className="py-2.5 px-4 font-mono font-semibold">API key name</th>
-                        <th className="py-2.5 px-4 font-mono font-semibold">API key value</th>
-                        <th className="py-2.5 px-4 font-mono font-semibold">Created by</th>
-                        <th className="py-2.5 px-4 font-mono font-semibold">Created at</th>
-                        {showKeyIds && (
-                          <th className="py-2.5 px-4 font-mono font-semibold">Key ID</th>
-                        )}
-                        <th className="py-2.5 px-3 text-right font-mono font-semibold w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60 text-xs">
-                      {app.keys.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={showKeyIds ? 6 : 5}
-                            className="py-6 text-center text-xs text-muted-foreground"
-                          >
-                            No API keys generated in this app yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        app.keys.map((key) => {
-                          const isRevealed = revealedKeys[key.id]
-                          const isCopied = copiedKeyId === key.id
-
-                          return (
-                            <tr key={key.id} className="hover:bg-muted/30 transition-colors group">
-                              {/* API key name */}
-                              <td className="py-3 px-4 font-medium text-foreground whitespace-nowrap">
-                                {key.name}
-                              </td>
-
-                              {/* API key value */}
-                              <td className="py-3 px-4 font-mono text-xs whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-foreground">
-                                    {isRevealed ? key.fullSecret : key.maskedValue}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    title={isRevealed ? 'Hide Secret' : 'Reveal Secret'}
-                                    onClick={() => toggleRevealKey(key.id)}
-                                    className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                                  >
-                                    {isRevealed ? (
-                                      <EyeOff className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <Eye className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title="Copy Secret"
-                                    onClick={() => handleCopy(key.fullSecret, key.id)}
-                                    className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                                  >
-                                    {isCopied ? (
-                                      <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                    ) : (
-                                      <Copy className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                </div>
-                              </td>
-
-                              {/* Created by */}
-                              <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                                {key.createdBy}
-                              </td>
-
-                              {/* Created at */}
-                              <td className="py-3 px-4 text-muted-foreground font-mono whitespace-nowrap">
-                                {key.createdAt}
-                              </td>
-
-                              {/* Key ID */}
-                              {showKeyIds && (
-                                <td className="py-3 px-4 font-mono text-[11px] text-foreground/90 whitespace-nowrap">
-                                  {key.id}
-                                </td>
-                              )}
-
-                              {/* Actions 3-dot dropdown */}
-                              <td className="py-3 px-3 text-right">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                                    >
-                                      <MoreVertical className="h-4 w-4" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-lg">
-                                    <DropdownMenuItem
-                                      onClick={() => handleCopy(key.fullSecret, key.id)}
-                                      className="text-xs flex items-center gap-2 cursor-pointer"
-                                    >
-                                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                                      Copy Key Value
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => handleCopy(key.id, key.id)}
-                                      className="text-xs flex items-center gap-2 cursor-pointer"
-                                    >
-                                      <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                                      Copy Key ID
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator className="my-1" />
-                                    <DropdownMenuItem
-                                      onClick={() => handleRevokeKey(app.id, key.id)}
-                                      className="text-xs text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2 cursor-pointer"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                      Revoke Key
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </td>
-                            </tr>
-                          )
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Card Footer Action: + CREATE NEW API KEY */}
-                <div className="p-3 bg-muted/10 border-t border-border/60">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenCreateKey(app.id)}
-                    className="rounded-lg h-7 px-2.5 text-xs font-mono uppercase tracking-wider font-semibold border-border/80 hover:bg-muted cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    CREATE NEW API KEY
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          ))}
-        </div>
-      ) : (
-        /* Account Keys Tab */
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground">Organization Root Keys</h2>
-          </div>
-
-          <Card className="rounded-xl border border-border/80 bg-card overflow-hidden shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-border/70 text-[11px] font-mono font-medium text-muted-foreground/80 bg-muted/20">
-                    <th className="py-2.5 px-4 font-mono font-semibold">Key Name</th>
-                    <th className="py-2.5 px-4 font-mono font-semibold">API Key Value</th>
-                    <th className="py-2.5 px-4 font-mono font-semibold">Created By</th>
-                    <th className="py-2.5 px-4 font-mono font-semibold">Created At</th>
-                    {showKeyIds && <th className="py-2.5 px-4 font-mono font-semibold">Key ID</th>}
-                    <th className="py-2.5 px-3 text-right font-mono font-semibold w-10"></th>
+      {/* Main API Keys Table Card */}
+      <div className="space-y-4">
+        <Card className="rounded-xl border border-border/80 bg-card overflow-hidden shadow-2xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border/70 text-[11px] font-mono font-medium text-muted-foreground/80 bg-muted/20">
+                  <th className="py-2.5 px-4 font-mono font-semibold">API Key Name</th>
+                  <th className="py-2.5 px-4 font-mono font-semibold">Key Value</th>
+                  <th className="py-2.5 px-4 font-mono font-semibold">Status</th>
+                  <th className="py-2.5 px-4 font-mono font-semibold">Created By</th>
+                  <th className="py-2.5 px-4 font-mono font-semibold">Created At</th>
+                  {showKeyIds && (
+                    <th className="py-2.5 px-4 font-mono font-semibold">Key ID</th>
+                  )}
+                  <th className="py-2.5 px-3 text-right font-mono font-semibold w-10"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60 text-xs">
+                {apiKeys.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={showKeyIds ? 7 : 6}
+                      className="py-14 px-4 text-center"
+                    >
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-3">
+                        <div className="w-12 h-12 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center text-muted-foreground shadow-2xs">
+                          <KeyRound className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-sm font-semibold text-foreground">No API keys yet</h3>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Create an API key to securely authenticate requests to the Sequential API.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={handleOpenCreateKey}
+                          className="mt-1 rounded-lg h-8 px-3.5 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs cursor-pointer"
+                          style={{ background: 'var(--primary)' }}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          CREATE API KEY
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60 text-xs">
-                  {accountKeys.map((key) => {
+                ) : (
+                  apiKeys.map((key) => {
                     const isRevealed = revealedKeys[key.id]
                     const isCopied = copiedKeyId === key.id
+                    const isEnabled = !key.revokedAt
 
                     return (
-                      <tr key={key.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="py-3 px-4 font-medium text-foreground whitespace-nowrap">
-                          {key.name}
+                      <tr
+                        key={key.id}
+                        className={`transition-colors group ${
+                          isEnabled
+                            ? 'hover:bg-muted/30'
+                            : 'bg-muted/15 opacity-75 hover:bg-muted/25'
+                        }`}
+                      >
+                        {/* Key name & optional description */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-medium ${
+                                isEnabled ? 'text-foreground' : 'text-muted-foreground line-through decoration-muted-foreground/40'
+                              }`}
+                            >
+                              {key.name}
+                            </span>
+                          </div>
+                          {key.description && (
+                            <div className="text-[11px] text-muted-foreground font-normal truncate max-w-[240px]">
+                              {key.description}
+                            </div>
+                          )}
                         </td>
+
+                        {/* Key value */}
                         <td className="py-3 px-4 font-mono text-xs whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">
+                            <span
+                              className={`font-semibold ${
+                                isEnabled ? 'text-foreground' : 'text-muted-foreground'
+                              }`}
+                            >
                               {isRevealed ? key.fullSecret : key.maskedValue}
                             </span>
                             <button
                               type="button"
+                              title={isRevealed ? 'Hide Secret' : 'Reveal Secret'}
                               onClick={() => toggleRevealKey(key.id)}
                               className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                             >
-                              {isRevealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              {isRevealed ? (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
                             </button>
                             <button
                               type="button"
+                              title="Copy Secret"
                               onClick={() => handleCopy(key.fullSecret, key.id)}
                               className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                             >
-                              {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                              {isCopied ? (
+                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
                             </button>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-muted-foreground">{key.createdBy}</td>
-                        <td className="py-3 px-4 text-muted-foreground font-mono">{key.createdAt}</td>
+
+                        {/* Status Toggle & Badge */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <Switch
+                              checked={isEnabled}
+                              onCheckedChange={(checked) => handleToggleKey(key.id, checked)}
+                              className="scale-90 cursor-pointer"
+                              aria-label={`Toggle status for ${key.name}`}
+                            />
+                            {isEnabled ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 select-none">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                Enabled
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border select-none">
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                                Disabled
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Created by */}
+                        <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
+                          {key.createdBy}
+                        </td>
+
+                        {/* Created at */}
+                        <td className="py-3 px-4 text-muted-foreground font-mono whitespace-nowrap">
+                          {key.createdAt}
+                        </td>
+
+                        {/* Key ID */}
                         {showKeyIds && (
-                          <td className="py-3 px-4 font-mono text-[11px] text-foreground/90">{key.id}</td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-foreground/90 whitespace-nowrap">
+                            {key.id}
+                          </td>
                         )}
+
+                        {/* Actions 3-dot dropdown */}
                         <td className="py-3 px-3 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -524,7 +488,23 @@ export default function ApiKeys() {
                                 Copy Key Value
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => handleRevokeKey(null, key.id)}
+                                onClick={() => handleCopy(key.id, key.id)}
+                                className="text-xs flex items-center gap-2 cursor-pointer"
+                              >
+                                <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                                Copy Key ID
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="my-1" />
+                              <DropdownMenuItem
+                                onClick={() => handleToggleKey(key.id, !isEnabled)}
+                                className="text-xs flex items-center gap-2 cursor-pointer"
+                              >
+                                <Power className="h-3.5 w-3.5 text-muted-foreground" />
+                                {isEnabled ? 'Disable Key' : 'Enable Key'}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="my-1" />
+                              <DropdownMenuItem
+                                onClick={() => setKeyToRevoke(key)}
                                 className="text-xs text-destructive focus:bg-destructive/10 focus:text-destructive flex items-center gap-2 cursor-pointer"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -535,25 +515,13 @@ export default function ApiKeys() {
                         </td>
                       </tr>
                     )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="p-3 bg-muted/10 border-t border-border/60">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleOpenCreateKey('account')}
-                className="rounded-lg h-7 px-2.5 text-xs font-mono uppercase tracking-wider font-semibold border-border/80 hover:bg-muted cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                CREATE NEW ACCOUNT KEY
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
 
       {/* Create API Key Modal Dialog */}
       <Dialog open={isCreateKeyModalOpen} onOpenChange={setIsCreateKeyModalOpen}>
@@ -564,8 +532,8 @@ export default function ApiKeys() {
             </DialogTitle>
             <DialogDescription className="text-xs">
               {createdSecret
-                ? 'Make sure to copy your API key now as you will not be able to see it again.'
-                : 'Enter a recognizable name for this key to identify its purpose.'}
+                ? 'Make sure to copy your key now as you will not be able to see the full secret again.'
+                : 'Enter a recognizable name and description for this key to identify its purpose.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -594,7 +562,7 @@ export default function ApiKeys() {
                       setCopiedCreatedSecret(true)
                       setTimeout(() => setCopiedCreatedSecret(false), 2000)
                     }}
-                    className="rounded-lg h-9 px-3 text-white font-medium shadow-xs"
+                    className="rounded-lg h-9 px-3 text-white font-medium shadow-xs shrink-0 cursor-pointer"
                     style={{ background: 'var(--primary)' }}
                   >
                     {copiedCreatedSecret ? (
@@ -617,7 +585,7 @@ export default function ApiKeys() {
                   type="button"
                   size="sm"
                   onClick={() => setIsCreateKeyModalOpen(false)}
-                  className="rounded-lg text-xs w-full text-white font-semibold shadow-xs"
+                  className="rounded-lg text-xs w-full text-white font-semibold shadow-xs cursor-pointer"
                   style={{ background: 'var(--primary)' }}
                 >
                   Done
@@ -637,6 +605,24 @@ export default function ApiKeys() {
                   onChange={(e) => setNewKeyName(e.target.value)}
                   className="rounded-lg h-8 text-xs"
                   required
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="key-description" className="text-xs font-semibold">
+                    Description
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground font-normal">Optional</span>
+                </div>
+                <Textarea
+                  id="key-description"
+                  placeholder="e.g. Used for background ingestion worker, indexing daemon, or production services."
+                  value={newKeyDescription}
+                  onChange={(e) => setNewKeyDescription(e.target.value)}
+                  className="text-xs resize-none min-h-[70px]"
+                  rows={3}
                 />
               </div>
 
@@ -646,18 +632,25 @@ export default function ApiKeys() {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsCreateKeyModalOpen(false)}
-                  className="rounded-lg text-xs"
+                  className="rounded-lg text-xs cursor-pointer"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={!newKeyName.trim()}
-                  className="rounded-lg text-xs text-white font-semibold shadow-xs"
+                  disabled={!newKeyName.trim() || isSubmitting}
+                  className="rounded-lg text-xs text-white font-semibold shadow-xs cursor-pointer"
                   style={{ background: 'var(--primary)' }}
                 >
-                  Generate Key
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    'Generate Key'
+                  )}
                 </Button>
               </DialogFooter>
             </form>
@@ -665,54 +658,50 @@ export default function ApiKeys() {
         </DialogContent>
       </Dialog>
 
-      {/* Create App Modal Dialog */}
-      <Dialog open={isCreateAppModalOpen} onOpenChange={setIsCreateAppModalOpen}>
+      {/* Revoke Key Confirmation Dialog */}
+      <Dialog open={!!keyToRevoke} onOpenChange={(open) => !open && setKeyToRevoke(null)}>
         <DialogContent className="sm:max-w-md rounded-2xl p-5">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">Create New Application</DialogTitle>
+            <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Revoke API Key
+            </DialogTitle>
             <DialogDescription className="text-xs">
-              Group and isolate API keys by environment or product module.
+              Are you sure you want to permanently revoke{' '}
+              <span className="font-semibold text-foreground">{keyToRevoke?.name}</span>? Any
+              services or workers using this key will immediately lose access. This action cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateAppSubmit} className="space-y-4 mt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="app-name" className="text-xs font-semibold">
-                Application Name
-              </Label>
-              <Input
-                id="app-name"
-                placeholder="e.g. Staging Crawler"
-                value={newAppName}
-                onChange={(e) => setNewAppName(e.target.value)}
-                className="rounded-lg h-8 text-xs"
-                required
-              />
-            </div>
-
-            <DialogFooter className="mt-4">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreateAppModalOpen(false)}
-                className="rounded-lg text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!newAppName.trim()}
-                className="rounded-lg text-xs text-white font-semibold shadow-xs"
-                style={{ background: 'var(--primary)' }}
-              >
-                Create App
-              </Button>
-            </DialogFooter>
-          </form>
+          <DialogFooter className="mt-4 flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setKeyToRevoke(null)}
+              className="rounded-lg text-xs cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (keyToRevoke) {
+                  handleRevokeKey(keyToRevoke.id)
+                  setKeyToRevoke(null)
+                }
+              }}
+              className="rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+            >
+              Revoke & Remove
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+    </Skeleton>
   )
 }

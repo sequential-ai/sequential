@@ -3,7 +3,8 @@ const {
     registerUser,
     loginUser,
     logoutUser,
-    getProfile
+    getProfile,
+    createOrganization
 } = require('../../controllers/auth.controller');
 const { protect } = require('../../middlewares/auth.middleware');
 
@@ -20,5 +21,8 @@ router.post('/logout', logoutUser);
 
 // Route: /api/v1/auth/me
 router.get('/me', protect, getProfile);
+
+// Route: /api/v1/auth/organization
+router.post('/organization', protect, createOrganization);
 
 module.exports = router;

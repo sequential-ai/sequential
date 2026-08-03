@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Skeleton } from 'boneyard-js/react'
 import { useAuth } from '@/context/AuthContext'
 import { useUser } from '@clerk/clerk-react'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,9 +49,8 @@ function BarcodeIndicator({ total = 20, filled = 15, color = 'bg-primary', track
       {Array.from({ length: total }).map((_, i) => (
         <div
           key={i}
-          className={`h-4 flex-1 rounded-xs transition-all ${
-            i < filled ? color : trackColor
-          }`}
+          className={`h-4 flex-1 rounded-xs transition-all ${i < filled ? color : trackColor
+            }`}
         />
       ))}
     </div>
@@ -71,9 +72,57 @@ const MONTHLY_DATA = [
   { month: 'DEC', value: 520, formatted: '$520K', tokens: '43.0M' },
 ]
 
+function OverviewFallback() {
+  return (
+    <div className="w-full space-y-4 p-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+        <div className="space-y-1.5">
+          <UiSkeleton className="h-7 w-48 rounded-lg" />
+          <UiSkeleton className="h-4 w-72 rounded-md" />
+        </div>
+        <div className="flex items-center gap-2">
+          <UiSkeleton className="h-8 w-36 rounded-lg" />
+          <UiSkeleton className="h-8 w-24 rounded-lg" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="p-3.5 rounded-xl border border-border/80 bg-card space-y-2">
+            <div className="flex justify-between items-center">
+              <UiSkeleton className="h-3.5 w-24 rounded" />
+              <UiSkeleton className="h-4 w-12 rounded" />
+            </div>
+            <UiSkeleton className="h-7 w-20 rounded" />
+            <UiSkeleton className="h-3 w-32 rounded" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 p-5 rounded-2xl border border-border/80 bg-card space-y-4">
+          <div className="flex justify-between items-center">
+            <UiSkeleton className="h-5 w-40 rounded" />
+            <UiSkeleton className="h-7 w-32 rounded-lg" />
+          </div>
+          <UiSkeleton className="h-64 w-full rounded-xl" />
+        </div>
+        <div className="p-5 rounded-2xl border border-border/80 bg-card space-y-4">
+          <UiSkeleton className="h-5 w-32 rounded" />
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <UiSkeleton key={i} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Overview() {
   const { user } = useUser()
-  const { dbUser } = useAuth()
+  const { dbUser, isSyncing } = useAuth()
   const navigate = useNavigate()
 
   // User Display Name
@@ -118,7 +167,7 @@ export default function Overview() {
   }
 
   const handleCopyKey = () => {
-    navigator.clipboard.writeText('sk_live_seq_9f83a1b24e62c4d8')
+    navigator.clipboard.writeText('sk_live_sample_key_sequential')
     setCopiedKey(true)
     setTimeout(() => setCopiedKey(false), 2000)
   }
@@ -130,7 +179,13 @@ export default function Overview() {
   }
 
   return (
-    <div className="w-full max-w-full min-w-0 space-y-4">
+    <Skeleton
+      name="overview-page"
+      loading={isSyncing}
+      fallback={<OverviewFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="w-full max-w-full min-w-0 space-y-4">
       {/* Compact Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div>
@@ -163,7 +218,7 @@ export default function Overview() {
             className="rounded-lg h-8 px-3.5 text-xs font-bold text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono"
             style={{ background: 'var(--primary, #F2541B)' }}
           >
-            
+
             New Task
           </Button>
         </div>
@@ -331,11 +386,10 @@ export default function Overview() {
                   >
                     {/* Tooltip */}
                     <div
-                      className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md transition-all ${
-                        isSelected || item.isPeak
+                      className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md transition-all ${isSelected || item.isPeak
                           ? 'bg-primary text-white scale-100 opacity-100'
                           : 'opacity-0 group-hover:opacity-100 bg-foreground text-background'
-                      }`}
+                        }`}
                     >
                       {metricFilter === 'Token Volume' ? item.tokens : item.formatted}
                     </div>
@@ -344,13 +398,12 @@ export default function Overview() {
                     <div className="w-full bg-muted/40 rounded-t-md relative flex flex-col justify-end overflow-hidden h-full max-w-[36px]">
                       <div
                         style={{ height: `${heightPercentage}%` }}
-                        className={`w-full rounded-t-md transition-all duration-300 ${
-                          item.isPeak
+                        className={`w-full rounded-t-md transition-all duration-300 ${item.isPeak
                             ? 'bg-primary shadow-xs'
                             : isSelected
-                            ? 'bg-primary/80'
-                            : 'bg-primary/25 group-hover:bg-primary/45'
-                        }`}
+                              ? 'bg-primary/80'
+                              : 'bg-primary/25 group-hover:bg-primary/45'
+                          }`}
                       >
                         {!item.isPeak && (
                           <div className="w-full h-full opacity-35 bg-[linear-gradient(45deg,rgba(0,0,0,0.06)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.06)_50%,rgba(0,0,0,0.06)_75%,transparent_75%,transparent)] bg-[length:6px_6px]" />
@@ -360,11 +413,10 @@ export default function Overview() {
 
                     {/* Month Label */}
                     <span
-                      className={`text-[10px] font-mono font-medium transition-colors ${
-                        isSelected || item.isPeak
+                      className={`text-[10px] font-mono font-medium transition-colors ${isSelected || item.isPeak
                           ? 'text-primary font-bold'
                           : 'text-muted-foreground group-hover:text-foreground'
-                      }`}
+                        }`}
                     >
                       {item.month}
                     </span>
@@ -577,5 +629,6 @@ export default function Overview() {
         </DialogContent>
       </Dialog>
     </div>
+    </Skeleton>
   )
 }

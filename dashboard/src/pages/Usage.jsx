@@ -1,5 +1,8 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Skeleton } from 'boneyard-js/react'
+import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -227,7 +230,34 @@ const CustomTooltip = ({ active, payload, label, showMonetary }) => {
   return null
 }
 
+function UsageFallback() {
+  return (
+    <div className="w-full space-y-4 p-1">
+      <UiSkeleton className="h-8 w-28 rounded-lg" />
+      <div className="flex items-center gap-2">
+        <UiSkeleton className="h-8 w-32 rounded-lg" />
+        <UiSkeleton className="h-8 w-32 rounded-lg" />
+        <UiSkeleton className="h-8 w-32 rounded-lg" />
+      </div>
+      <div className="p-5 rounded-2xl border border-border/80 bg-card space-y-4">
+        <div className="flex justify-between items-center">
+          <UiSkeleton className="h-5 w-40 rounded" />
+          <UiSkeleton className="h-7 w-32 rounded-lg" />
+        </div>
+        <UiSkeleton className="h-64 w-full rounded-xl" />
+      </div>
+      <div className="p-5 rounded-2xl border border-border/80 bg-card space-y-3">
+        <UiSkeleton className="h-5 w-32 rounded" />
+        {[1, 2, 3, 4].map((i) => (
+          <UiSkeleton key={i} className="h-12 w-full rounded-lg" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Usage() {
+  const { isSyncing } = useAuth()
   const navigate = useNavigate()
 
   // Top Filter States
@@ -287,7 +317,13 @@ export default function Usage() {
   })
 
   return (
-    <div className="w-full max-w-full min-w-0 space-y-4">
+    <Skeleton
+      name="usage-page"
+      loading={isSyncing}
+      fallback={<UsageFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="w-full max-w-full min-w-0 space-y-4">
       {/* Top Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Usage</h1>
@@ -772,5 +808,6 @@ export default function Usage() {
         )}
       </Dialog>
     </div>
+    </Skeleton>
   )
 }

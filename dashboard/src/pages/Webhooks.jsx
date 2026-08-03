@@ -1,4 +1,7 @@
 import React, { useState } from 'react'
+import { Skeleton } from 'boneyard-js/react'
+import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -65,7 +68,31 @@ const INITIAL_DELIVERIES = [
   },
 ]
 
+function WebhooksFallback() {
+  return (
+    <div className="w-full space-y-6 p-1">
+      <UiSkeleton className="h-8 w-36 rounded-lg" />
+      <UiSkeleton className="h-12 w-full rounded-xl" />
+      <div className="p-5 rounded-2xl border border-border/80 bg-card space-y-4">
+        <div className="flex justify-between items-center">
+          <UiSkeleton className="h-5 w-28 rounded" />
+          <UiSkeleton className="h-5 w-16 rounded-full" />
+        </div>
+        <UiSkeleton className="h-10 w-full rounded-lg" />
+      </div>
+      <div className="p-5 rounded-2xl border border-border/80 bg-card space-y-4">
+        <div className="flex justify-between items-center">
+          <UiSkeleton className="h-5 w-40 rounded" />
+          <UiSkeleton className="h-8 w-32 rounded-lg" />
+        </div>
+        <UiSkeleton className="h-32 w-full rounded-xl" />
+      </div>
+    </div>
+  )
+}
+
 export default function Webhooks() {
+  const { isSyncing } = useAuth()
   const [secret, setSecret] = useState('whsec_7f9a2b84c6e1d350a21')
   const [showSecret, setShowSecret] = useState(false)
   const [copiedSecret, setCopiedSecret] = useState(false)
@@ -139,7 +166,13 @@ export default function Webhooks() {
     : `${secret.slice(0, 6)}••••••••••••${secret.slice(-4)}`
 
   return (
-    <div className="w-full space-y-6">
+    <Skeleton
+      name="webhooks-page"
+      loading={isSyncing}
+      fallback={<WebhooksFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="w-full space-y-6">
       {/* Page Title */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Webhooks</h1>
@@ -488,5 +521,6 @@ export default function Webhooks() {
         </DialogContent>
       </Dialog>
     </div>
+    </Skeleton>
   )
 }

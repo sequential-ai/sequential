@@ -109,7 +109,7 @@ const registerUser = async (req, res) => {
                 data: {
                     organizationId: newOrg.id,
                     planId: freePlan.id,
-                    provider: 'Razorpay', // As per enum
+                    provider: 'Razorpay',
                     status: 'ACTIVE',
                 }
             });
@@ -237,9 +237,138 @@ const getProfile = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Create a new organization for the user
+ * @route   POST /api/v1/auth/organization
+ */
+const createOrganization = async (req, res) => {
+    try {
+        const clerkUserId = req.user.id;
+        const { name, invites = [], surveyAnswers = [] } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, message: "Organization name is required" });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { clerkUserId }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const orgSlug = `${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+        const clerkOrgId = `org_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+        const newOrg = await prisma.$transaction(async (tx) => {
+            // 1. Create Organization
+            const org = await tx.organization.create({
+                data: {
+                    clerkOrgId,
+                    name: name.trim(),
+                    slug: orgSlug,
+                    metadata: {
+                        surveyAnswers,
+                    }
+                }
+            });
+
+            // 2. Add creator as OWNER
+            await tx.organizationMember.create({
+                data: {
+                    organizationId: org.id,
+                    userId: user.id,
+                    role: 'OWNER'
+                }
+            });
+
+            // 3. Free plan & subscription
+            const freePlan = await tx.plan.upsert({
+                where: { key: 'free' },
+                update: {},
+                create: {
+                    key: 'free',
+                    name: 'Free Plan',
+                    monthlyPrice: 0,
+                    yearlyPrice: 0,
+                    maxMembers: 5,
+                    maxApiKeys: 2,
+                    maxProjects: 3,
+                    storageLimitGb: 2,
+                    monthlyCredits: 100,
+                    monthlyRequestLimit: 1000,
+                    rateLimitPerMinute: 60,
+                }
+            });
+
+            await tx.subscription.create({
+                data: {
+                    organizationId: org.id,
+                    planId: freePlan.id,
+                    provider: 'Razorpay',
+                    status: 'ACTIVE'
+                }
+            });
+
+            // 4. Initial credits
+            await tx.creditLedgerEntry.create({
+                data: {
+                    organizationId: org.id,
+                    amount: 100,
+                    balanceAfter: 100,
+                    type: 'GRANT',
+                    reason: 'Organization Creation Welcome Grant'
+                }
+            });
+
+            // 5. If invites provided, create invites
+            if (Array.isArray(invites) && invites.length > 0) {
+                for (const inv of invites) {
+                    const email = typeof inv === 'string' ? inv : inv.email;
+                    const role = typeof inv === 'object' && inv.role ? inv.role : 'VIEWER';
+                    if (email && email.trim()) {
+                        await tx.organizationInvite.create({
+                            data: {
+                                organizationId: org.id,
+                                email: email.trim().toLowerCase(),
+                                role: role === 'Admin' ? 'ADMIN' : (role === 'Developer' ? 'DEVELOPER' : 'VIEWER'),
+                                token: crypto.randomBytes(32).toString('hex'),
+                                invitedByUserId: user.id,
+                                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                            }
+                        }).catch(e => console.warn('Invite creation notice:', e.message));
+                    }
+                }
+            }
+
+            return org;
+        });
+
+        // Fetch refreshed user profile with all memberships
+        const updatedUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: userInclude
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "Organization created successfully",
+            data: {
+                organization: newOrg,
+                user: updatedUser
+            }
+        });
+    } catch (error) {
+        console.error("Create Org Error:", error);
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     logoutUser,
-    getProfile
+    getProfile,
+    createOrganization
 };

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Skeleton } from 'boneyard-js/react'
+import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -104,7 +107,41 @@ const INITIAL_HISTORY = [
   },
 ]
 
+function TasksFallback() {
+  return (
+    <div className="w-full space-y-6 p-1">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <UiSkeleton className="h-8 w-32 rounded-lg" />
+          <UiSkeleton className="h-7 w-24 rounded-lg" />
+        </div>
+        <UiSkeleton className="h-8 w-44 rounded-lg" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-5 p-6 rounded-2xl border border-border/80 bg-card space-y-4">
+          <UiSkeleton className="h-5 w-32 rounded" />
+          <UiSkeleton className="h-28 w-full rounded-xl" />
+          <div className="grid grid-cols-3 gap-2">
+            {[1, 2, 3].map((i) => (
+              <UiSkeleton key={i} className="h-16 rounded-xl" />
+            ))}
+          </div>
+          <UiSkeleton className="h-10 w-full rounded-lg" />
+        </div>
+        <div className="lg:col-span-7 p-6 rounded-2xl border border-border/80 bg-card space-y-4">
+          <div className="flex justify-between items-center">
+            <UiSkeleton className="h-5 w-36 rounded" />
+            <UiSkeleton className="h-7 w-48 rounded-lg" />
+          </div>
+          <UiSkeleton className="h-64 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Tasks() {
+  const { isSyncing } = useAuth()
   const [searchParams] = useSearchParams()
   const initialView = searchParams.get('tab') === 'history' ? 'history' : 'playground'
   const [activeView, setActiveView] = useState(initialView)
@@ -265,7 +302,13 @@ run();`
   }
 
   return (
-    <div className="w-full space-y-6">
+    <Skeleton
+      name="tasks-page"
+      loading={isSyncing}
+      fallback={<TasksFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="w-full space-y-6">
       {/* Header Row: Title, History Toggle & Quickstart Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -804,5 +847,6 @@ run();`
         </DialogContent>
       </Dialog>
     </div>
+    </Skeleton>
   )
 }

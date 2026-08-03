@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { SignedIn, SignedOut } from '@clerk/clerk-react'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import Onboard from './pages/Onboard'
 import DashboardLayout from './layouts/DashboardLayout'
 import Overview from './pages/Overview'
 import Tasks from './pages/Tasks'
@@ -22,6 +23,21 @@ function App() {
       {/* Public Auth Routes */}
       <Route path="/login/*" element={<Login />} />
       <Route path="/signup/*" element={<Signup />} />
+
+      {/* Onboarding Flow Route */}
+      <Route
+        path="/onboard"
+        element={
+          <>
+            <SignedIn>
+              <Onboard />
+            </SignedIn>
+            <SignedOut>
+              <Navigate to="/login" replace />
+            </SignedOut>
+          </>
+        }
+      />
 
       {/* Protected Dashboard Shell Routes */}
       <Route

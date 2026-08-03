@@ -87,6 +87,7 @@ const createApiKey = async (req, res) => {
             select: {
                 id: true,
                 name: true,
+                description: true,
                 keyPrefix: true,
                 createdAt: true,
             }

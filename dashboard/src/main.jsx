@@ -8,6 +8,22 @@ import { ThemeProvider } from '@/context/ThemeContext'
 import { AuthProvider } from '@/context/AuthContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
+import { configureBoneyard } from 'boneyard-js/react'
+import './bones/registry'
+
+// Configure global Boneyard skeleton defaults
+configureBoneyard({
+  color: '#F2EDE3',
+  darkColor: '#18181b',
+  animate: 'shimmer',
+  shimmerColor: '#FAF8F5',
+  darkShimmerColor: '#27272a',
+  speed: '1.8s',
+  shimmerAngle: 110,
+  transition: true,
+  stagger: true,
+})
+
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 if (!PUBLISHABLE_KEY) {

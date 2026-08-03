@@ -1,4 +1,7 @@
 import React, { useState } from 'react'
+import { Skeleton } from 'boneyard-js/react'
+import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,7 +63,40 @@ const AUDIT_LOGS = [
   },
 ]
 
+function AuditLogsFallback() {
+  return (
+    <div className="space-y-5 p-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="space-y-1.5">
+          <UiSkeleton className="h-7 w-48 rounded-lg" />
+          <UiSkeleton className="h-4 w-96 rounded-md" />
+        </div>
+        <UiSkeleton className="h-8 w-32 rounded-lg" />
+      </div>
+      <UiSkeleton className="h-8 w-full max-w-sm rounded-lg" />
+      <div className="p-4 rounded-xl border border-border/80 bg-card space-y-4">
+        <div className="flex justify-between items-center pb-3 border-b border-border/40">
+          <UiSkeleton className="h-5 w-32 rounded" />
+          <UiSkeleton className="h-4 w-48 rounded" />
+        </div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center justify-between py-2.5 border-b border-border/20 last:border-0">
+            <div className="flex items-center gap-4">
+              <UiSkeleton className="h-4 w-28 rounded" />
+              <UiSkeleton className="h-5 w-24 rounded-md" />
+              <UiSkeleton className="h-4 w-20 rounded" />
+              <UiSkeleton className="h-4 w-48 rounded" />
+            </div>
+            <UiSkeleton className="h-5 w-16 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function AuditLogs() {
+  const { isSyncing } = useAuth()
   const [search, setSearch] = useState('')
 
   const filtered = AUDIT_LOGS.filter(
@@ -71,7 +107,13 @@ export default function AuditLogs() {
   )
 
   return (
-    <div className="space-y-5">
+    <Skeleton
+      name="audit-logs-page"
+      loading={isSyncing}
+      fallback={<AuditLogsFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -152,5 +194,6 @@ export default function AuditLogs() {
         </CardContent>
       </Card>
     </div>
+    </Skeleton>
   )
 }

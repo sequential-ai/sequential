@@ -1,4 +1,8 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Skeleton } from 'boneyard-js/react'
+import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,7 +29,6 @@ import {
   Calendar,
   MoreVertical,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 
 const INITIAL_PROJECTS = [
   {
@@ -78,7 +81,38 @@ const INITIAL_PROJECTS = [
   },
 ]
 
+function ProjectsFallback() {
+  return (
+    <div className="space-y-5 p-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="space-y-1.5">
+          <UiSkeleton className="h-7 w-48 rounded-lg" />
+          <UiSkeleton className="h-4 w-72 rounded-md" />
+        </div>
+        <UiSkeleton className="h-8 w-32 rounded-lg" />
+      </div>
+      <UiSkeleton className="h-9 w-full max-w-sm rounded-lg" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="p-5 rounded-xl border border-border/80 bg-card space-y-4">
+            <div className="flex items-center justify-between">
+              <UiSkeleton className="h-6 w-32 rounded" />
+              <UiSkeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <UiSkeleton className="h-10 w-full rounded" />
+            <div className="flex justify-between items-center pt-2 border-t border-border/40">
+              <UiSkeleton className="h-4 w-20 rounded" />
+              <UiSkeleton className="h-4 w-20 rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Projects() {
+  const { isSyncing } = useAuth()
   const [projects, setProjects] = useState(INITIAL_PROJECTS)
   const [searchQuery, setSearchQuery] = useState('')
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
@@ -115,7 +149,13 @@ export default function Projects() {
   }
 
   return (
-    <div className="space-y-5">
+    <Skeleton
+      name="projects-page"
+      loading={isSyncing}
+      fallback={<ProjectsFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -256,5 +296,6 @@ export default function Projects() {
         </DialogContent>
       </Dialog>
     </div>
+    </Skeleton>
   )
 }

@@ -1,5 +1,8 @@
 import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { Skeleton } from 'boneyard-js/react'
+import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -131,7 +134,37 @@ The transition from monolithic foundation model prompting to **autonomous, multi
 [12:30:18.322] [SUCCESS] [DAG-Master] Pipeline execution completed in 4.2s (Total tokens: 42,800, Cost: $0.0428)`,
 }
 
+function TaskDetailFallback() {
+  return (
+    <div className="w-full space-y-5 p-1">
+      <div className="flex items-center gap-2">
+        <UiSkeleton className="h-4 w-28 rounded" />
+      </div>
+      <div className="p-6 rounded-2xl border border-border/80 bg-card space-y-4">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <UiSkeleton className="h-6 w-36 rounded" />
+            <UiSkeleton className="h-4 w-96 rounded" />
+          </div>
+          <UiSkeleton className="h-6 w-24 rounded-full" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-border/50">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="space-y-1">
+              <UiSkeleton className="h-3 w-16 rounded" />
+              <UiSkeleton className="h-5 w-24 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <UiSkeleton className="h-10 w-80 rounded-lg" />
+      <UiSkeleton className="h-80 w-full rounded-2xl" />
+    </div>
+  )
+}
+
 export default function TaskDetail() {
+  const { isSyncing } = useAuth()
   const { id } = useParams()
   const [activeTab, setActiveTab] = useState('report')
   const [copiedReport, setCopiedReport] = useState(false)
@@ -145,7 +178,13 @@ export default function TaskDetail() {
   }
 
   return (
-    <div className="space-y-5">
+    <Skeleton
+      name="task-detail-page"
+      loading={isSyncing}
+      fallback={<TaskDetailFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="space-y-5">
       {/* Header with Breadcrumb & Actions */}
       <div className="space-y-3">
         <Button asChild variant="ghost" size="xs" className="rounded-md -ml-2 text-xs text-muted-foreground hover:text-foreground">
@@ -359,5 +398,6 @@ export default function TaskDetail() {
         </TabsContent>
       </Tabs>
     </div>
+    </Skeleton>
   )
 }

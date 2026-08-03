@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
+import { Skeleton } from 'boneyard-js/react'
 import { useAuth } from '@/context/AuthContext'
+import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,8 +25,31 @@ import {
   Lock,
 } from 'lucide-react'
 
+function SettingsFallback() {
+  return (
+    <div className="w-full space-y-6 p-1">
+      <div className="space-y-1.5">
+        <UiSkeleton className="h-7 w-48 rounded-lg" />
+        <UiSkeleton className="h-4 w-96 rounded-md" />
+      </div>
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="p-5 rounded-xl border border-border/80 bg-card space-y-3">
+            <UiSkeleton className="h-5 w-40 rounded" />
+            <UiSkeleton className="h-4 w-64 rounded" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <UiSkeleton className="h-9 w-full rounded-lg" />
+              <UiSkeleton className="h-9 w-full rounded-lg" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Settings() {
-  const { org } = useAuth()
+  const { org, isSyncing } = useAuth()
   const [orgName, setOrgName] = useState(org?.name || "Yash's Workspace")
   const [defaultDepth, setDefaultDepth] = useState('deep')
   const [openaiKey, setOpenaiKey] = useState('')
@@ -40,7 +65,13 @@ export default function Settings() {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <Skeleton
+      name="settings-page"
+      loading={isSyncing}
+      fallback={<SettingsFallback />}
+      className="w-full min-w-0"
+    >
+      <div className="w-full space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Organization Settings</h1>
@@ -197,5 +228,6 @@ export default function Settings() {
         </div>
       </form>
     </div>
+    </Skeleton>
   )
 }
