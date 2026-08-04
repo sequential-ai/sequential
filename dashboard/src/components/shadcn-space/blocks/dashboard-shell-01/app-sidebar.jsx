@@ -194,7 +194,7 @@ const SequentialAppSidebar = ({ children }) => {
 
   return (
     <SidebarProvider>
-      <Sidebar className="py-3 px-0 bg-sidebar border-r border-sidebar-border w-64">
+      <Sidebar className="py-2 px-0 bg-sidebar border-r border-sidebar-border w-64">
         <div className="flex flex-col h-full bg-sidebar justify-between">
           {/* Top Header & Navigation */}
           <div className="flex flex-col gap-2">
@@ -206,9 +206,9 @@ const SequentialAppSidebar = ({ children }) => {
                   <button
                     type="button"
                     className="
-                      group relative flex w-full items-center gap-2.5
+                      group relative cursor-pointer flex w-full items-center gap-2.5
                       rounded-lg border border-sidebar-border/70
-                      bg-sidebar-accent hover:bg-sidebar-accent/70
+                      bg-sidebar-accent/50 hover:bg-sidebar-accent/70
                       px-2.5 py-2
                       text-left outline-none
                       transition-all duration-150
