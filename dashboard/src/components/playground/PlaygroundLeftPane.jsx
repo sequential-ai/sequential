@@ -12,8 +12,9 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
+    DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu'
-import { ExternalLink, ChevronDown, Play, RotateCw, Calendar } from 'lucide-react'
+import { ExternalLink, ChevronDown, Play, RotateCw, Calendar, Link2, GitFork, Network, Workflow, GitPullRequest, Check, Zap } from 'lucide-react'
 
 export default function PlaygroundLeftPane({
     leftWidth,
@@ -59,6 +60,13 @@ export default function PlaygroundLeftPane({
     } = setters
 
     const { handleKeyDown, handleRunTask } = handlers
+
+    const MODELS = [
+        { id: 'FAST', label: 'Fast', desc: 'Lightweight and faster (1 worker)', time: '10s - 20s', icon: Link2 },
+        { id: 'STANDARD', label: 'Standard', desc: 'Efficient for standard tasks (4 workers)', time: '15s - 50s', icon: GitFork },
+        { id: 'DEEP', label: 'Deep', desc: 'Balanced and strong at many tasks (6 DAGs)', time: '15s - 2min', icon: Network },
+    ]
+    const activeModel = MODELS.find(m => m.id === mode) || MODELS[0]
 
     return (
         <div
@@ -114,40 +122,67 @@ export default function PlaygroundLeftPane({
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            rows={3}
-                            className="resize-none border-0 p-0 text-xs sm:text-sm font-sans bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none leading-relaxed"
+                            rows={8}
+                            className="min-h-[150px] resize-none border-0 p-1.5 text-xs font-sans bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none leading-relaxed"
                         />
 
                         {/* Bottom row inside Query box: Examples dropdown & Run Button */}
                         <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
-                            {/* Examples Dropdown */}
+                            {/* Model Dropdown */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <button
                                         type="button"
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 bg-zinc-100 dark:bg-zinc-800/50 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer border border-zinc-200 dark:border-zinc-800"
+                                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-50 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-[#1A1A1A]  transition-colors cursor-pointer border border-zinc-400 dark:border-zinc-700/80 "
                                     >
-                                        <span>Examples</span>
-                                        <ChevronDown className="h-3 w-3" />
+                                        <activeModel.icon className="h-4 w-4 text-foreground dark:text-white" strokeWidth={1.5} />
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-bold text-foreground dark:text-white tracking-wide">{activeModel.label}</span>
+                                           
+                                        </div>
+                                        <ChevronDown className="h-4 w-4 text-foreground dark:text-white ml-1 opacity-80" strokeWidth={2.5} />
                                     </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
                                     align="start"
-                                    className="w-80 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1.5 shadow-2xl"
+                                    className="w-[320px] bg-white dark:bg-[#111111] border-zinc-200 dark:border-zinc-800 rounded-xl p-1 shadow-2xl"
                                 >
-                                    <DropdownMenuLabel className="text-[10px] uppercase font-mono text-zinc-400 px-2 py-1">
-                                        Sample Queries ({activeCategoryMeta.label})
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
-                                    {activeCategoryMeta.prompts.map((sample, i) => (
-                                        <DropdownMenuItem
-                                            key={i}
-                                            onClick={() => setPrompt(sample)}
-                                            className="text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer py-1.5 px-2"
-                                        >
-                                            {sample}
-                                        </DropdownMenuItem>
-                                    ))}
+                                    <DropdownMenuGroup>
+                                        {MODELS.map((item) => (
+                                            <DropdownMenuItem
+                                                key={item.id}
+                                                onClick={() => setMode(item.id)}
+                                                className={`group flex items-start justify-between p-3 cursor-pointer rounded-lg transition-colors ${
+                                                    mode === item.id 
+                                                        ? 'bg-zinc-100 dark:bg-zinc-900/50' 
+                                                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/80'
+                                                }`}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    {/* Left Icon */}
+                                                    <div className={`mt-0.5 transition-colors ${mode === item.id ? 'text-zinc-900 dark:text-zinc-200' : 'text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-300'}`}>
+                                                        <item.icon className="h-5 w-5 stroke-[1.5]" />
+                                                    </div>
+                                                    {/* Text content */}
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[15px] font-bold text-zinc-900 dark:text-zinc-100">{item.label}</span>
+                                                            <div className="flex flex-col gap-[2px] opacity-60">
+                                                                <div className="h-[2px] w-3 bg-zinc-500 rounded-full" />
+                                                                <div className="h-[2px] w-2 bg-zinc-500 rounded-full" />
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-[13px] text-zinc-500 dark:text-zinc-400 font-medium">{item.desc}</span>
+                                                        <span className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-0.5">{item.time}</span>
+                                                    </div>
+                                                </div>
+                                                {/* Right Checkmark */}
+                                                {mode === item.id && (
+                                                    <Check className="h-4 w-4 text-emerald-500 mt-1" />
+                                                )}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuGroup>
                                 </DropdownMenuContent>
                             </DropdownMenu>
 
@@ -181,111 +216,7 @@ export default function PlaygroundLeftPane({
                 {normalizedCategory === 'task' && (
                     /* Task Controls */
                     <div className="space-y-3 pt-1">
-                        {/* Location & Language Row */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Location</label>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <button
-                                            type="button"
-                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                        >
-                                            <span className="truncate">{location}</span>
-                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                        </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="w-56 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                        {['US — United States', 'EU — European Union', 'GB — United Kingdom', 'Global — Worldwide'].map((loc) => (
-                                            <DropdownMenuItem
-                                                key={loc}
-                                                onClick={() => setLocation(loc)}
-                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                            >
-                                                {loc}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
 
-                            <div className="space-y-1">
-                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Language</label>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <button
-                                            type="button"
-                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                        >
-                                            <span className="truncate">{language}</span>
-                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                        </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                        {['en — English', 'es — Spanish', 'de — German', 'fr — French', 'ja — Japanese'].map((lang) => (
-                                            <DropdownMenuItem
-                                                key={lang}
-                                                onClick={() => setLanguage(lang)}
-                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                            >
-                                                {lang}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
-                        </div>
-
-                        {/* Published Date Range */}
-                        <div className="space-y-1">
-                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Published date range</label>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                    >
-                                        <span className="truncate">{dateRange === 'Any time' ? 'Select date range' : dateRange}</span>
-                                        <Calendar className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-56 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                    {['Any time', 'Past 24 hours', 'Past week', 'Past month', 'Past year'].map((d) => (
-                                        <DropdownMenuItem
-                                            key={d}
-                                            onClick={() => setDateRange(d)}
-                                            className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                        >
-                                            {d}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-
-                        {/* Speed / Depth Mode Selector */}
-                        <div className="space-y-1 pt-1">
-                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Execution Depth</label>
-                            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                                {[
-                                    { id: 'FAST', label: 'FAST', desc: '1 worker' },
-                                    { id: 'STANDARD', label: 'STANDARD', desc: '4 workers' },
-                                    { id: 'DEEP', label: 'DEEP', desc: '6 DAGs' },
-                                ].map((item) => (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        onClick={() => setMode(item.id)}
-                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-mono font-semibold uppercase transition-all cursor-pointer text-center ${mode === item.id
-                                            ? 'bg-white dark:bg-zinc-800 text-primary shadow-xs border border-zinc-200 dark:border-zinc-700/60 font-bold'
-                                            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                                            }`}
-                                    >
-                                        {item.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
 
                         {/* Structured Output Toggle */}
                         <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/60 space-y-2">
