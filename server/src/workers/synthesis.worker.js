@@ -25,8 +25,15 @@ class SynthesisWorker extends BaseWorker {
     }
 
     let systemPrompt = SYNTHESIS_SYSTEM_PROMPT;
+    let llmResponseFormat = { type: "json_object" };
     
-    if (input.taskSpec) {
+    if (input.responseFormat === "markdown") {
+      systemPrompt = `You are the final synthesis worker for Sequential AI.\n\nYour responsibility is to produce the final research result as a highly presentable, pure MARKDOWN string.\n\nIMPORTANT INSTRUCTIONS:\n1. Always start your response with a large level-1 heading (# Title) that perfectly summarizes the research topic.\n2. Do NOT generate JSON. Do NOT wrap your answer in a JSON object (e.g. no "summary" or "data" fields).\n3. Use Markdown tables if the answer requires tabular data.\n4. Keep the presentation simple, clean, and professional, similar to a README.md file.\n5. Use proper heading hierarchy (##, ###), lists, and bold text as appropriate.\n6. Ensure you cite your sources properly in the text.`;
+      if (input.taskSpec) {
+        systemPrompt += `\n\nUse the following JSON schema strictly as a conceptual guide for what information to include in your Markdown output, but remember: DO NOT output JSON:\n${JSON.stringify(input.taskSpec)}`;
+      }
+      llmResponseFormat = undefined;
+    } else if (input.taskSpec) {
       systemPrompt = `${SYNTHESIS_SYSTEM_PROMPT}\n\nReturn JSON matching this exact JSON Schema:\n${JSON.stringify(input.taskSpec)}`;
     }
 
@@ -34,7 +41,7 @@ class SynthesisWorker extends BaseWorker {
       model: input.model || this.model,
       temperature: input.temperature ?? 0.1,
       maxTokens: input.maxTokens,
-      responseFormat: { type: "json_object" },
+      responseFormat: llmResponseFormat,
       messages: [
         {
           role: "system",
@@ -60,6 +67,13 @@ class SynthesisWorker extends BaseWorker {
         }
       }
     });
+
+    if (input.responseFormat === "markdown") {
+      return {
+        ...result,
+        answer: result.content.trim()
+      };
+    }
 
     const output = parseJsonContent(result.content, "INVALID_SYNTHESIS_OUTPUT");
 

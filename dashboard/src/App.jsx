@@ -68,6 +68,7 @@ function App() {
         <Route path="tasks" element={<Tasks />} />
         <Route path="playground" element={<Navigate to="/dashboard/playground/task" replace />} />
         <Route path="playground/:tab" element={<Playground />} />
+        <Route path="playground/:tab/:id" element={<Playground />} />
         <Route path="monitor" element={<Monitor />} />
         <Route path="tasks/:id" element={<TaskDetail />} />
         <Route path="projects" element={<Projects />} />

@@ -89,7 +89,58 @@ const authenticateApiKey = async (req, res, next) => {
 
 
 
+/**
+ * Combined Middleware: Accepts EITHER a valid API Key OR a valid Session JWT.
+ * - Used for routes like `/tasks` that are called both programmatically and via the dashboard Playground.
+ */
+const protectOrApiKey = async (req, res, next) => {
+  try {
+    const rawKey = req.headers["x-api-key"];
+    const authHeader = req.headers.authorization;
+    
+    // 1. Try API Key Auth first if x-api-key is explicitly provided
+    if (rawKey) {
+      const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+      const apiKey = await prisma.apiKey.findUnique({ where: { keyHash } });
+
+      if (!apiKey || apiKey.revokedAt || (apiKey.expiresAt && apiKey.expiresAt < new Date())) {
+        return res.status(401).json({ error: "Invalid, revoked, or expired API Key." });
+      }
+
+      prisma.apiKey.update({
+        where: { id: apiKey.id },
+        data: { lastUsedAt: new Date(), lastUsedIp: req.ip || req.connection.remoteAddress }
+      }).catch(console.error);
+
+      req.organizationId = apiKey.organizationId;
+      req.apiKey = apiKey;
+      return next();
+    }
+
+    // 2. Fallback to JWT Session Auth
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-for-dev-only');
+      req.user = decoded;
+      
+      // Dashboard sends x-organization-id for session requests
+      const orgId = req.headers['x-organization-id'];
+      if (!orgId) {
+        return res.status(400).json({ error: "Missing x-organization-id header for session request." });
+      }
+      req.organizationId = orgId;
+      return next();
+    }
+
+    return res.status(401).json({ error: "Unauthorized. Missing API Key or Session Token." });
+  } catch (error) {
+    console.error("protectOrApiKey Middleware Error:", error);
+    res.status(401).json({ error: "Not authorized, token failed" });
+  }
+};
+
 module.exports = {
   authenticateApiKey,
-  protect
+  protect,
+  protectOrApiKey
 };

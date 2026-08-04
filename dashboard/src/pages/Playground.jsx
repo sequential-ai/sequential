@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Skeleton } from 'boneyard-js/react'
 import { useAuth } from '@/context/AuthContext'
+import { api } from '@/api/client'
 import { Skeleton as UiSkeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -132,103 +133,12 @@ export const API_CATEGORIES = [
     },
 ]
 
-export const INITIAL_HISTORY = [
-    {
-        id: 'tsk_9f83a1b2',
-        category: 'task',
-        query: 'Comprehensive market analysis for enterprise agentic AI architectures in 2026',
-        status: 'COMPLETED',
-        mode: 'DEEP',
-        workerCount: 6,
-        citationCount: 18,
-        duration: '4.2s',
-        tokens: 42800,
-        cost: 0.0428,
-        createdAt: '10 mins ago',
-        output: {
-            answer: `### Executive Summary\n\nEnterprise adoption of agentic AI architectures has accelerated rapidly in 2026, transitioning from single-turn LLM pipelines to multi-agent distributed systems capable of autonomous tool calling, continuous state persistence, and real-time environment validation.\n\n### Key Architectural Trends\n\n1. **Deterministic DAG Execution**: Modern workflows isolate critical validation layers to prevent cascade hallucination.\n2. **Hybrid Synthesis Layers**: Blending sub-100ms reasoning models with deep verification models reduces total unit cost by 40%.\n3. **Decentralized Memory Graphs**: Multi-modal memory vector stores enable cross-session task retrieval with zero latency overhead.`,
-            structuredData: {
-                title: 'Enterprise Agentic AI Architecture Trends',
-                confidenceScore: 0.98,
-                keyFindings: [
-                    'Deterministic DAG isolation cuts error rates by 78%',
-                    'Hybrid routing reduces inference cost by 40%',
-                    'Zero-latency memory graphs enable cross-session context retention',
-                ],
-            },
-            sources: [
-                { title: 'State of Multi-Agent Systems 2026', url: 'https://arxiv.org/abs/2603.1892' },
-                { title: 'Enterprise AI Infrastructure Report', url: 'https://research.sequential.ai/infra-2026' },
-            ],
-        },
-    },
-    {
-        id: 'mon_8819d4e2',
-        category: 'monitor',
-        query: 'https://api.sequential.ai/v1/health - Track latency anomaly spikes & SLA breach',
-        status: 'ACTIVE',
-        mode: 'REALTIME',
-        workerCount: 4,
-        citationCount: 0,
-        duration: '0.04s',
-        tokens: 1240,
-        cost: 0.0012,
-        createdAt: '15 mins ago',
-        output: {
-            answer: `### Live Stream Monitor: Health Probe\n\nEndpoint **https://api.sequential.ai/v1/health** is operating within normal SLA thresholds.\n\n- **P95 Latency**: 38ms\n- **P99 Latency**: 54ms\n- **Error Rate**: 0.00%\n- **Uptime**: 99.99%`,
-            events: [
-                { time: '14:22:01.402', status: '200 OK', latency: '34ms', note: 'Worker node us-east-1a healthy' },
-                { time: '14:22:01.350', status: '200 OK', latency: '41ms', note: 'Database pool latency nominal' },
-                { time: '14:22:01.300', status: '200 OK', latency: '38ms', note: 'Heartbeat ping ACK' },
-            ],
-        },
-    },
-    {
-        id: 'mem_33a01b7c',
-        category: 'memory',
-        query: 'Retrieve user preferences, active project sessions and auth tokens for org_98a72',
-        status: 'COMPLETED',
-        mode: 'GRAPH_RAG',
-        workerCount: 2,
-        citationCount: 4,
-        duration: '1.2s',
-        tokens: 8900,
-        cost: 0.0089,
-        createdAt: '30 mins ago',
-        output: {
-            answer: `### Context Graph Retrieval\n\nSuccessfully retrieved semantic entities and relationship graph for **org_98a72** across vector namespace \`prod-agents\`.\n\n- **Matched Entities**: 8 node entities\n- **Graph Depth**: 2-hop relational traverse\n- **Average Similarity**: 0.942`,
-            entities: [
-                { name: 'Organization: Sequential Enterprise', score: 0.984, type: 'Entity' },
-                { name: 'ActiveSession: sess_90184b (Agent Reasoning)', score: 0.961, type: 'Session' },
-                { name: 'TokenPolicy: role:read_write_admin', score: 0.923, type: 'Policy' },
-            ],
-        },
-    },
-    {
-        id: 'tsk_7e62c4d8',
-        category: 'task',
-        query: 'Synthesize cross-border regulatory compliance guidelines for FinTech AI deployment',
-        status: 'COMPLETED',
-        mode: 'STANDARD',
-        workerCount: 4,
-        citationCount: 9,
-        duration: '1.8s',
-        tokens: 18400,
-        cost: 0.0184,
-        createdAt: '45 mins ago',
-        output: {
-            answer: `### Regulatory Framework Overview\n\nFinTech deployments in EU and US jurisdictions require mandatory audit tracing on automated decisions, structured liability contracts, and model explainability metrics.`,
-            sources: [
-                { title: 'EU AI Act Tier 2 Compliance', url: 'https://compliance.eu/ai-act' },
-            ],
-        },
-    },
-]
+
 const handleCopyCode = () => {
     navigator.clipboard.writeText(getCodeSnippet())
     setIsCopied(true)
     setTimeout(() => setIsCopied(false), 2000)
-    
+
 }
 
 function PlaygroundFallback() {
@@ -267,7 +177,7 @@ function PlaygroundFallback() {
 export default function Playground() {
     const { isSyncing } = useAuth()
     const { theme, toggle } = useTheme()
-    const { tab } = useParams()
+    const { tab, id } = useParams()
     const navigate = useNavigate()
     const [searchParams] = useSearchParams()
 
@@ -286,6 +196,8 @@ export default function Playground() {
     const [mode, setMode] = useState('FAST') // Task: FAST | STANDARD | DEEP, Monitor: REALTIME | CONTINUOUS | CRON, Memory: VECTOR_COSINE | HYBRID | GRAPH_RAG
     const [isStructuredOutput, setIsStructuredOutput] = useState(false)
     const [schemaTemplate, setSchemaTemplate] = useState('{\n  "title": "string",\n  "keyFindings": ["string"],\n  "confidenceScore": 0.95\n}')
+    const [responseFormat, setResponseFormat] = useState('markdown') // 'markdown' | 'json'
+    const [includeTrace, setIncludeTrace] = useState(false)
 
     // Task Filter Dropdown States
     const [location, setLocation] = useState('US — United States')
@@ -324,8 +236,25 @@ export default function Playground() {
     const [isOutputCopied, setIsOutputCopied] = useState(false)
 
     // History State
-    const [historyList, setHistoryList] = useState(INITIAL_HISTORY)
+    const [historyList, setHistoryList] = useState([])
     const [historySearch, setHistorySearch] = useState('')
+
+    // Fetch History on Mount
+    useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                const res = await api.getTasks()
+                if (res.data) {
+                    setHistoryList(res.data)
+                }
+            } catch (err) {
+                console.error("Failed to fetch tasks history:", err)
+            }
+        }
+        if (!isSyncing) {
+            fetchHistory()
+        }
+    }, [isSyncing])
 
     // Sync prompt and mode when switching tabs
     useEffect(() => {
@@ -343,6 +272,31 @@ export default function Playground() {
         }
         setCurrentResult(null)
     }, [normalizedCategory])
+
+    // Load task if ID is provided in URL
+    useEffect(() => {
+        if (!id) return;
+        const loadTask = async () => {
+            try {
+                const res = await api.getTaskStatus(id);
+                if (res.data) {
+                    const taskData = res.data;
+                    const generatedResult = {
+                        id: taskData.run?.run_id || id,
+                        category: normalizedCategory,
+                        query: taskData.query || taskData.run?.input?.query || 'Loaded Task',
+                        run: taskData.run || taskData,
+                        output: taskData.output
+                    };
+                    setCurrentResult(generatedResult);
+                    setPrompt(generatedResult.query);
+                }
+            } catch (err) {
+                console.error("Failed to load task by ID:", err);
+            }
+        };
+        loadTask();
+    }, [id, normalizedCategory]);
 
     // Dragging logic for Resizable Split Pane
     useEffect(() => {
@@ -382,70 +336,79 @@ export default function Playground() {
     }
 
     // Run Execution handler based on active category
-    const handleRunTask = () => {
+    const handleRunTask = async () => {
         if (!prompt.trim() || isRunning) return
 
         setIsRunning(true)
         setCurrentResult(null)
 
         if (normalizedCategory === 'task') {
-            setExecutionStep('Planning execution DAG...')
-            setTimeout(() => {
-                setExecutionStep(
-                    mode === 'DEEP'
-                        ? 'Dispatching 6 parallel research workers...'
-                        : mode === 'STANDARD'
-                            ? 'Dispatching 4 research workers...'
-                            : 'Querying synthesis engine...'
-                )
-            }, 600)
-
-            setTimeout(() => {
-                setExecutionStep('Aggregating citations & synthesizing answer...')
-            }, 1300)
-
-            setTimeout(() => {
-                const generatedResult = {
-                    id: `tsk_${Date.now().toString(36)}`,
-                    category: 'task',
-                    query: prompt,
-                    mode,
-                    status: 'COMPLETED',
-                    duration: mode === 'DEEP' ? '3.8s' : mode === 'STANDARD' ? '2.1s' : '0.9s',
-                    tokens: mode === 'DEEP' ? 34200 : mode === 'STANDARD' ? 18600 : 7400,
-                    cost: mode === 'DEEP' ? 0.0342 : mode === 'STANDARD' ? 0.0186 : 0.0074,
-                    workerCount: mode === 'DEEP' ? 6 : mode === 'STANDARD' ? 4 : 2,
-                    createdAt: 'Just now',
-                    location,
-                    language,
-                    output: {
-                        answer: `### Results for "${prompt}"\n\nSequential AI synthesized results across multiple verified sources for **${prompt}**.\n\n1. **Core Findings**: Headless browser ecosystems in 2026 are dominated by lightweight WebAssembly runtimes and distributed CDP orchestration clusters.\n2. **Optimization Metrics**: Autonomous multi-tab concurrency achieves **sub-120ms DOM extraction** with anti-bot bypass validation.\n3. **Recommended Integration**: Use the Sequential Browser Agent SDK to pipe DOM states directly into your extraction pipeline.`,
-                        structuredData: isStructuredOutput
-                            ? {
-                                query: prompt,
-                                title: prompt.slice(0, 45),
-                                keyFindings: [
-                                    'High confidence extraction completed with 0 errors',
-                                    'Zero cascade hallucination detected across 12 source domains',
-                                    'Latency within sub-second tier SLA',
-                                ],
-                                confidenceScore: 0.98,
-                                extractedAt: new Date().toISOString(),
-                            }
-                            : null,
-                        sources: [
-                            { title: 'Sequential Headless Browser Spec (2026)', url: 'https://docs.sequential.ai/browser' },
-                            { title: 'Global Browser Automation Benchmark', url: 'https://benchmarks.ai/browsers' },
-                            { title: 'Enterprise Web Scraping Architecture', url: 'https://sequential.ai/docs/tasks' },
-                        ],
-                    },
+            setExecutionStep('Initializing task...')
+            try {
+                // Determine taskSpec to pass
+                let taskSpec = null
+                if (isStructuredOutput) {
+                    try {
+                        taskSpec = JSON.parse(schemaTemplate)
+                    } catch (e) {
+                        alert("Invalid JSON in Schema Template")
+                        setIsRunning(false)
+                        return
+                    }
                 }
 
-                setCurrentResult(generatedResult)
-                setHistoryList([generatedResult, ...historyList])
+                const res = await api.createTask({
+                    query: prompt,
+                    mode,
+                    taskSpec,
+                    responseFormat,
+                    includeTrace
+                })
+
+                const taskId = res.data?.run?.run_id
+                if (!taskId) {
+                    throw new Error("No task ID returned")
+                }
+
+                setExecutionStep('Task running on backend... (Polling)')
+
+                // Poll every 2 seconds
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await api.getTaskStatus(taskId)
+                        const taskData = statusRes.data
+
+                        const status = taskData?.run?.status
+                        if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELED') {
+                            clearInterval(pollInterval)
+
+                            // Map backend task to playground result structure
+                            const generatedResult = {
+                                id: taskData.run.run_id,
+                                category: 'task',
+                                query: prompt,
+                                run: taskData.run,
+                                output: taskData.output
+                            }
+
+                            setCurrentResult(generatedResult)
+                            setHistoryList(prev => [generatedResult, ...prev])
+                            setIsRunning(false)
+                            setExecutionStep('')
+                        }
+                    } catch (pollErr) {
+                        console.error("Polling error:", pollErr)
+                        clearInterval(pollInterval)
+                        setIsRunning(false)
+                        setExecutionStep('Error checking task status')
+                    }
+                }, 2000)
+
+            } catch (err) {
+                console.error("Error creating task:", err)
                 setIsRunning(false)
-                setExecutionStep('')
-            }, 2100)
+                setExecutionStep('Error starting task')
+            }
         } else if (normalizedCategory === 'monitor') {
             setExecutionStep('Initiating telemetry stream listener...')
             setTimeout(() => {
@@ -455,19 +418,25 @@ export default function Playground() {
                 setExecutionStep('Piping real-time event telemetry...')
             }, 1000)
             setTimeout(() => {
+                const now = new Date().toISOString()
                 const generatedResult = {
                     id: `mon_${Date.now().toString(36)}`,
                     category: 'monitor',
                     query: prompt,
-                    mode,
-                    status: 'ACTIVE',
-                    duration: '0.04s',
-                    tokens: 1420,
-                    cost: 0.0014,
-                    workerCount: 4,
-                    createdAt: 'Just now',
+                    run: {
+                        run_id: `mon_${Date.now().toString(36)}`,
+                        status: 'ACTIVE',
+                        mode,
+                        processor: mode,
+                        metadata: { responseFormat: 'markdown', includeTrace: false, workerCount: 4 },
+                        execution: { costTotal: 0.0014, tokensUsed: 1420, executionTimeMs: 40 },
+                        created_at: now,
+                        modified_at: now,
+                        completed_at: null,
+                    },
                     output: {
-                        answer: `### Active Stream Monitor: ${prompt}\n\nContinuous telemetry listener established. Verified **0 anomaly spikes** exceeding threshold \`${alertThreshold}\`.\n\n- **Target**: \`${prompt}\`\n- **Health Status**: 🟢 Healthy (SLA 99.99%)\n- **P95 Latency**: 36ms\n- **P99 Latency**: 48ms\n- **Webhook Dispatch**: \`${webhookUrl}\``,
+                        type: 'markdown',
+                        content: `### Active Stream Monitor: ${prompt}\n\nContinuous telemetry listener established. Verified **0 anomaly spikes** exceeding threshold \`${alertThreshold}\`.\n\n- **Target**: \`${prompt}\`\n- **Health Status**: 🟢 Healthy (SLA 99.99%)\n- **P95 Latency**: 36ms\n- **P99 Latency**: 48ms\n- **Webhook Dispatch**: \`${webhookUrl}\``,
                         events: [
                             { time: new Date().toLocaleTimeString() + '.892', status: '200 OK', latency: '32ms', note: 'Worker cluster ingress nominal' },
                             { time: new Date().toLocaleTimeString() + '.410', status: '200 OK', latency: '44ms', note: 'SSL handshake valid (TLS 1.3)' },
@@ -490,19 +459,25 @@ export default function Playground() {
                 setExecutionStep('Computing cosine similarity & semantic rank...')
             }, 1200)
             setTimeout(() => {
+                const now = new Date().toISOString()
                 const generatedResult = {
                     id: `mem_${Date.now().toString(36)}`,
                     category: 'memory',
                     query: prompt,
-                    mode,
-                    status: 'COMPLETED',
-                    duration: '1.1s',
-                    tokens: 7200,
-                    cost: 0.0072,
-                    workerCount: 2,
-                    createdAt: 'Just now',
+                    run: {
+                        run_id: `mem_${Date.now().toString(36)}`,
+                        status: 'COMPLETED',
+                        mode,
+                        processor: mode,
+                        metadata: { responseFormat: 'markdown', includeTrace: false, workerCount: 2 },
+                        execution: { costTotal: 0.0072, tokensUsed: 7200, executionTimeMs: 1100 },
+                        created_at: now,
+                        modified_at: now,
+                        completed_at: now,
+                    },
                     output: {
-                        answer: `### Memory Context Graph Retrieval\n\nRetrieved high-confidence semantic entities from collection \`${namespace}\` matching query **"${prompt}"** with threshold \`>= ${similarityThreshold}\`.\n\n1. **Semantic Density**: 12 entity clusters identified with 0 contradiction markers.\n2. **Graph Traversal**: Linked cross-session tokens to verified organization identity.\n3. **Context Injection**: Memory payload formatted for zero-latency prompt augmentation.`,
+                        type: 'markdown',
+                        content: `### Memory Context Graph Retrieval\n\nRetrieved high-confidence semantic entities from collection \`${namespace}\` matching query **"${prompt}"** with threshold \`>= ${similarityThreshold}\`.\n\n1. **Semantic Density**: 12 entity clusters identified with 0 contradiction markers.\n2. **Graph Traversal**: Linked cross-session tokens to verified organization identity.\n3. **Context Injection**: Memory payload formatted for zero-latency prompt augmentation.`,
                         entities: [
                             { name: 'Entity: Sequential Enterprise Org Record', score: 0.982, type: 'Organization' },
                             { name: 'AgentSession: sess_77b912 (Active Orchestration)', score: 0.954, type: 'Session' },
@@ -527,13 +502,13 @@ export default function Playground() {
         }
     }
 
-    // Copy Output
+    // Copy Output — reads from the new output.content key
     const handleCopyCurrentOutput = () => {
         if (!currentResult) return
         const textToCopy =
             outputFormat === 'json'
                 ? JSON.stringify(currentResult, null, 2)
-                : currentResult.output.answer
+                : currentResult.output?.content || ''
 
         navigator.clipboard.writeText(textToCopy)
         setIsOutputCopied(true)
@@ -549,6 +524,8 @@ export default function Playground() {
         mode,
         isStructuredOutput,
         schemaTemplate,
+        responseFormat,
+        includeTrace,
         location,
         language,
         dateRange,
@@ -572,6 +549,8 @@ export default function Playground() {
         setMode,
         setIsStructuredOutput,
         setSchemaTemplate,
+        setResponseFormat,
+        setIncludeTrace,
         setLocation,
         setLanguage,
         setDateRange,

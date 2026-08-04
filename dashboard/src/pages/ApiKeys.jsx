@@ -640,21 +640,8 @@ export default function ApiKeys() {
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-lg">
-                                <DropdownMenuItem
-                                  onClick={() => handleCopy(key.fullSecret, key.id)}
-                                  className="text-xs flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                                  Copy Key Value
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleCopy(key.id, key.id)}
-                                  className="text-xs flex items-center gap-2 cursor-pointer"
-                                >
-                                  <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                                  Copy Key ID
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator className="my-1" />
+                               
+                        
                                 <DropdownMenuItem
                                   onClick={() => handleToggleKey(key.id, !isEnabled)}
                                   className="text-xs flex items-center gap-2 cursor-pointer"

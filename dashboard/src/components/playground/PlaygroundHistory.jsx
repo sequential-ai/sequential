@@ -43,47 +43,61 @@ export default function PlaygroundHistory({
                             item.query.toLowerCase().includes(historySearch.toLowerCase()) ||
                             item.id.toLowerCase().includes(historySearch.toLowerCase())
                         )
-                        .map((item) => (
-                            <div
-                                key={item.id}
-                                className="p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3"
-                            >
-                                <div className="space-y-1 max-w-xl">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-mono text-xs font-bold text-zinc-900 dark:text-zinc-200">{item.id}</span>
-                                        <Badge variant="outline" className="text-[10px] font-mono border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 uppercase">
-                                            {item.category || 'task'}
-                                        </Badge>
-                                        <Badge variant="outline" className="text-[10px] font-mono border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400">
-                                            {item.mode}
-                                        </Badge>
-                                        <StatusBadge status={item.status} />
-                                    </div>
-                                    <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-1">{item.query}</p>
-                                </div>
+                        .map((item) => {
+                            // Support both the new { run, output } envelope and old flat shape
+                            const run = item.run
+                            const status = run?.status ?? item.status
+                            const mode = run?.mode ?? item.mode
+                            const durationMs = run?.execution?.executionTimeMs
+                            const durationLabel = durationMs != null ? `${(durationMs / 1000).toFixed(2)}s` : (item.duration ?? '—')
+                            const tokens = run?.execution?.tokensUsed ?? item.tokens
+                            const cost = run?.execution?.costTotal ?? item.cost
+                            const createdAt = run?.created_at
+                                ? new Date(run.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : (item.createdAt ?? '—')
 
-                                <div className="flex items-center gap-4 text-xs font-mono text-zinc-500">
-                                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{item.duration}</span>
-                                    <span>{item.tokens?.toLocaleString()} tok</span>
-                                    <span>${item.cost?.toFixed(4)}</span>
-                                    <span>{item.createdAt}</span>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            const targetCat = item.category || 'task'
-                                            navigate(`/dashboard/playground/${targetCat}`)
-                                            setPrompt(item.query)
-                                            setCurrentResult(item)
-                                            setActiveView('playground')
-                                        }}
-                                        className="h-7 text-xs text-primary hover:bg-primary/10 rounded cursor-pointer"
-                                    >
-                                        Load Result ↗
-                                    </Button>
+                            return (
+                                <div
+                                    key={item.id}
+                                    className="p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3"
+                                >
+                                    <div className="space-y-1 max-w-xl">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-mono text-xs font-bold text-zinc-900 dark:text-zinc-200">{item.id}</span>
+                                            <Badge variant="outline" className="text-[10px] font-mono border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 uppercase">
+                                                {item.category || 'task'}
+                                            </Badge>
+                                            <Badge variant="outline" className="text-[10px] font-mono border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400">
+                                                {mode}
+                                            </Badge>
+                                            <StatusBadge status={status} />
+                                        </div>
+                                        <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-1">{item.query}</p>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 text-xs font-mono text-zinc-500">
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{durationLabel}</span>
+                                        <span>{tokens != null ? tokens.toLocaleString() : '—'} tok</span>
+                                        <span>{cost != null ? `$${Number(cost).toFixed(4)}` : '—'}</span>
+                                        <span>{createdAt}</span>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                const targetCat = item.category || 'task'
+                                                navigate(`/dashboard/playground/${targetCat}/${item.id}`)
+                                                setPrompt(item.query)
+                                                setCurrentResult(item)
+                                                setActiveView('playground')
+                                            }}
+                                            className="h-7 text-xs text-primary hover:bg-primary/10 rounded cursor-pointer"
+                                        >
+                                            Load Result ↗
+                                        </Button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                 </div>
             </Card>
         </div>

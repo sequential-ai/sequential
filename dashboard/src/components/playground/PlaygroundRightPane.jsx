@@ -1,8 +1,95 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, Copy, Radio, Network, FileText, Code2, Layers, RotateCw, Search, CheckCircle2, ExternalLink } from 'lucide-react'
+import { Check, Copy, Radio, Network, FileText, Code2, Layers, RotateCw, Search, CheckCircle2, ExternalLink, Brain, ChevronDown, ChevronRight } from 'lucide-react'
 import CodeDialog from '@/components/CodeDialog'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
+// ─── Collapsible Reasoning Trace (Basis) Block ───────────────────────────────
+function BasisBlock({ basis }) {
+    const [expanded, setExpanded] = React.useState(true)
+    if (!basis || basis.length === 0) return null
+
+    return (
+        <div className="space-y-2">
+            <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="flex items-center gap-2 text-[11px] font-mono font-semibold uppercase text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors cursor-pointer select-none group"
+            >
+                <Brain className="h-3.5 w-3.5 text-primary" />
+                <span className="tracking-wider">Agent Reasoning Trace</span>
+                {expanded
+                    ? <ChevronDown className="h-3 w-3 opacity-60" />
+                    : <ChevronRight className="h-3 w-3 opacity-60" />}
+            </button>
+
+            {expanded && basis.map((b, bi) => (
+                <div
+                    key={bi}
+                    className="rounded-xl border border-primary/20 bg-primary/[0.03] dark:bg-primary/[0.05] p-4 space-y-3"
+                >
+                    {/* Reasoning text */}
+                    {b.reasoning && (
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-mono font-semibold uppercase text-primary/60 tracking-wider">Reasoning</span>
+                            <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">{b.reasoning}</p>
+                        </div>
+                    )}
+
+                    {/* Confidence pill */}
+                    {b.confidence != null && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Confidence</span>
+                            <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                                <div
+                                    className="h-full rounded-full bg-emerald-500 transition-all"
+                                    style={{ width: `${Math.round(b.confidence * 100)}%` }}
+                                />
+                            </div>
+                            <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                                {(b.confidence * 100).toFixed(0)}%
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Citations */}
+                    {b.citations && b.citations.length > 0 && (
+                        <div className="space-y-1.5">
+                            <span className="text-[10px] font-mono font-semibold uppercase text-zinc-500 tracking-wider">
+                                Citations ({b.citations.length})
+                            </span>
+                            <div className="space-y-2">
+                                {b.citations.map((cite, ci) => (
+                                    <div
+                                        key={ci}
+                                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-2.5 space-y-1"
+                                    >
+                                        <a
+                                            href={cite.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:text-primary dark:hover:text-primary transition-colors group"
+                                        >
+                                            <span className="truncate">{cite.title || cite.url}</span>
+                                            <ExternalLink className="h-3 w-3 text-zinc-400 shrink-0 group-hover:text-primary transition-colors" />
+                                        </a>
+                                        {cite.excerpts && cite.excerpts.length > 0 && (
+                                            <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-2">
+                                                &ldquo;{cite.excerpts[0]}&rdquo;
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    )
+}
 
 export default function PlaygroundRightPane({
     leftWidth,
@@ -23,6 +110,8 @@ export default function PlaygroundRightPane({
         mode,
         isStructuredOutput,
         schemaTemplate,
+        responseFormat,
+        includeTrace,
         location,
         language,
         alertThreshold,
@@ -43,6 +132,14 @@ export default function PlaygroundRightPane({
         handleCopyCurrentOutput,
     } = handlers
 
+    // ── Derived helpers pulling from the new { run, output } envelope ──
+    const run = currentResult?.run
+    const output = currentResult?.output
+    const durationMs = run?.execution?.executionTimeMs
+    const durationLabel = durationMs != null ? `${(durationMs / 1000).toFixed(2)}s` : null
+    const tokensLabel = run?.execution?.tokensUsed
+    const costLabel = run?.execution?.costTotal
+
     return (
         <div
             style={{ width: `${100 - leftWidth}%` }}
@@ -56,11 +153,17 @@ export default function PlaygroundRightPane({
                         <>
                             {/* Telemetry pill */}
                             <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
-                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{currentResult.duration}</span>
-                                <span>•</span>
-                                <span>{currentResult.tokens.toLocaleString()} tok</span>
-                                <span>•</span>
-                                <span className="text-zinc-700 dark:text-zinc-300">${currentResult.cost.toFixed(4)}</span>
+                                {durationLabel && (
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{durationLabel}</span>
+                                )}
+                                {durationLabel && tokensLabel && <span>•</span>}
+                                {tokensLabel != null && (
+                                    <span>{tokensLabel.toLocaleString()} tok</span>
+                                )}
+                                {tokensLabel && costLabel && <span>•</span>}
+                                {costLabel != null && (
+                                    <span className="text-zinc-700 dark:text-zinc-300">${Number(costLabel).toFixed(4)}</span>
+                                )}
                             </div>
 
                             {/* Copy Output Button */}
@@ -124,39 +227,36 @@ export default function PlaygroundRightPane({
                     </div>
                 ) : currentResult ? (
                     /* Completed Result View */
-                    <div className="space-y-4 max-w-3xl pb-16">
+                    <div className="space-y-4 w-full pb-16 px-2">
                         {/* View: Primary Markdown / Stream / Entities */}
                         {outputFormat === 'markdown' && (
-                            <div className="space-y-4">
-                                <div className="prose dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed space-y-3 font-sans text-zinc-800 dark:text-zinc-200">
-                                    {currentResult.output.answer.split('\n\n').map((para, i) => {
-                                        if (para.startsWith('### ')) {
-                                            return (
-                                                <h3 key={i} className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 pt-2 pb-1 border-b border-zinc-200 dark:border-zinc-800/80">
-                                                    {para.replace('### ', '')}
-                                                </h3>
-                                            )
-                                        }
-                                        if (para.startsWith('1. ') || para.startsWith('2. ') || para.startsWith('3. ') || para.startsWith('- ')) {
-                                            return (
-                                                <div key={i} className="flex items-start gap-2 pl-1">
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                                                    <p className="text-xs sm:text-sm leading-relaxed">{para.replace(/^[0-9]\.\s*|-\s*/, '')}</p>
-                                                </div>
-                                            )
-                                        }
-                                        return <p key={i} className="text-xs sm:text-sm leading-relaxed">{para}</p>
-                                    })}
+                            <div className="space-y-5">
+                                <div className="prose dark:prose-invert prose-sm max-w-none leading-relaxed font-sans text-zinc-800 dark:text-zinc-200 prose-pre:bg-zinc-100 prose-pre:text-zinc-900 dark:prose-pre:bg-zinc-900 dark:prose-pre:text-zinc-100 prose-p:leading-relaxed prose-a:text-primary">
+                                    <ReactMarkdown 
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            table: ({node, ...props}) => <div className="overflow-x-auto my-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm"><table className="w-full text-sm text-left border-collapse" {...props} /></div>,
+                                            thead: ({node, ...props}) => <thead className="text-xs uppercase bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100" {...props} />,
+                                            th: ({node, ...props}) => <th className="px-5 py-4 font-semibold" {...props} />,
+                                            td: ({node, ...props}) => <td className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800/50 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-[#0a0a0a]" {...props} />,
+                                            tr: ({node, ...props}) => <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors" {...props} />,
+                                            h1: ({node, ...props}) => <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white mt-10 mb-6 tracking-tight leading-tight" {...props} />,
+                                            h2: ({node, ...props}) => <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mt-8 mb-5 tracking-tight" {...props} />,
+                                            h3: ({node, ...props}) => <h3 className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-white mt-6 mb-4 tracking-tight" {...props} />
+                                        }}
+                                    >
+                                        {output?.content || ''}
+                                    </ReactMarkdown>
                                 </div>
 
                                 {/* Monitor Specific: Live Event Stream Rows */}
-                                {currentResult.output.events && (
+                                {output?.events && (
                                     <div className="pt-2 space-y-2">
                                         <span className="text-[11px] font-mono font-semibold uppercase text-zinc-500 tracking-wider">
-                                            Live Stream Ingest ({currentResult.output.events.length} Events)
+                                            Live Stream Ingest ({output.events.length} Events)
                                         </span>
                                         <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900/50 shadow-xs font-mono text-xs">
-                                            {currentResult.output.events.map((evt, i) => (
+                                            {output.events.map((evt, i) => (
                                                 <div key={i} className="p-2.5 flex items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -176,13 +276,13 @@ export default function PlaygroundRightPane({
                                 )}
 
                                 {/* Memory Specific: Extracted Entities & Graph */}
-                                {currentResult.output.entities && (
+                                {output?.entities && (
                                     <div className="pt-2 space-y-2">
                                         <span className="text-[11px] font-mono font-semibold uppercase text-zinc-500 tracking-wider">
-                                            Matched Entity Nodes ({currentResult.output.entities.length})
+                                            Matched Entity Nodes ({output.entities.length})
                                         </span>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {currentResult.output.entities.map((ent, i) => (
+                                            {output.entities.map((ent, i) => (
                                                 <div
                                                     key={i}
                                                     className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-xs space-y-1.5"
@@ -202,43 +302,10 @@ export default function PlaygroundRightPane({
                                     </div>
                                 )}
 
-                                {/* Task Specific: Structured Object validation card */}
-                                {currentResult.output.structuredData && (
-                                    <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60 space-y-2">
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="font-bold text-zinc-900 dark:text-zinc-200">Structured Data Payload</span>
-                                            <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                                                Score: {(currentResult.output.structuredData.confidenceScore * 100).toFixed(0)}%
-                                            </Badge>
-                                        </div>
-                                        <pre className="p-2.5 rounded-lg bg-white dark:bg-zinc-950 font-mono text-[11px] text-zinc-800 dark:text-zinc-300 overflow-x-auto border border-zinc-200 dark:border-zinc-800">
-                                            <code>{JSON.stringify(currentResult.output.structuredData, null, 2)}</code>
-                                        </pre>
-                                    </div>
-                                )}
-
-                                {/* Verified Sources / Citations */}
-                                {currentResult.output.sources && currentResult.output.sources.length > 0 && (
-                                    <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
-                                        <span className="text-[11px] font-mono font-semibold uppercase text-zinc-500 tracking-wider">
-                                            Verified Citations ({currentResult.output.sources.length})
-                                        </span>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {currentResult.output.sources.map((src, i) => (
-                                                <a
-                                                    key={i}
-                                                    href={src.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300 group shadow-xs"
-                                                >
-                                                    <span className="truncate pr-2 font-medium group-hover:text-primary transition-colors">
-                                                        {src.title}
-                                                    </span>
-                                                    <ExternalLink className="h-3 w-3 text-zinc-400 shrink-0" />
-                                                </a>
-                                            ))}
-                                        </div>
+                                {/* ── Agent Reasoning Trace (Basis) — Task only, when includeTrace ── */}
+                                {output?.basis && output.basis.length > 0 && (
+                                    <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                                        <BasisBlock basis={output.basis} />
                                     </div>
                                 )}
                             </div>
@@ -256,9 +323,20 @@ export default function PlaygroundRightPane({
                         {/* View: Execution Trace */}
                         {outputFormat === 'trace' && (
                             <div className="space-y-3">
-                                <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between text-xs">
-                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">Total Duration: <strong className="text-zinc-900 dark:text-zinc-100">{currentResult.duration}</strong></span>
-                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">Parallel Workers: <strong className="text-zinc-900 dark:text-zinc-100">{currentResult.workerCount}</strong></span>
+                                {/* Run summary row */}
+                                <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">
+                                        Duration: <strong className="text-zinc-900 dark:text-zinc-100">{durationLabel ?? '—'}</strong>
+                                    </span>
+                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">
+                                        Workers: <strong className="text-zinc-900 dark:text-zinc-100">{run?.metadata?.workerCount ?? '—'}</strong>
+                                    </span>
+                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">
+                                        Format: <strong className="text-zinc-900 dark:text-zinc-100">{run?.metadata?.responseFormat ?? '—'}</strong>
+                                    </span>
+                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">
+                                        Trace: <strong className={run?.metadata?.includeTrace ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}>{run?.metadata?.includeTrace ? 'enabled' : 'disabled'}</strong>
+                                    </span>
                                 </div>
                                 <div className="space-y-2">
                                     {[
@@ -279,6 +357,13 @@ export default function PlaygroundRightPane({
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Show reasoning trace inline in Trace tab as well */}
+                                {output?.basis && output.basis.length > 0 && (
+                                    <div className="pt-2">
+                                        <BasisBlock basis={output.basis} />
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -312,7 +397,7 @@ export default function PlaygroundRightPane({
             </div>
 
             {/* Floating Code Panel — bottom-right, no overlay */}
-            {isCodeModalOpen && 
+            {isCodeModalOpen &&
                 <CodeDialog
                     prompt={prompt}
                     activeCategoryMeta={activeCategoryMeta}
@@ -320,6 +405,8 @@ export default function PlaygroundRightPane({
                     mode={mode}
                     isStructuredOutput={isStructuredOutput}
                     schemaTemplate={schemaTemplate}
+                    responseFormat={responseFormat}
+                    includeTrace={includeTrace}
                     location={location}
                     language={language}
                     alertThreshold={alertThreshold}

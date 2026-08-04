@@ -37,6 +37,9 @@ export const api = {
   bulkDeleteApiKeys: (ids) => client.post('/apikeys/bulk/delete', { ids }),
 
   // Tasks
+  getTasks: (apiKey) => client.get('/tasks', {
+    headers: apiKey ? { 'x-api-key': apiKey } : {}
+  }),
   createTask: (payload, apiKey) => client.post('/tasks', payload, {
     headers: apiKey ? { 'x-api-key': apiKey } : {}
   }),

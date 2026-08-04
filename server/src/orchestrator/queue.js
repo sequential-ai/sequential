@@ -12,10 +12,10 @@ const crypto = require("crypto");
 /**
  * Enqueues the initial PLAN job.
  */
-async function enqueuePlanJob(taskId, organizationId, query, mode = "STANDARD", taskSpec = null) {
+async function enqueuePlanJob(taskId, organizationId, query, mode = "STANDARD", taskSpec = null, responseFormat = "markdown") {
   await researchQueue.add(
     "PLAN",
-    { taskId, organizationId, query, mode, taskSpec },
+    { taskId, organizationId, query, mode, taskSpec, responseFormat },
     { jobId: `plan-${taskId}` }
   );
 }
@@ -62,10 +62,10 @@ async function enqueueExtractJob(taskId, organizationId, url, content, query, mo
 /**
  * Enqueues the final SYNTHESIZE job.
  */
-async function enqueueSynthesizeJob(taskId, organizationId, query, taskSpec = null) {
+async function enqueueSynthesizeJob(taskId, organizationId, query, taskSpec = null, responseFormat = "markdown") {
   await researchQueue.add(
     "SYNTHESIZE",
-    { taskId, organizationId, query, taskSpec },
+    { taskId, organizationId, query, taskSpec, responseFormat },
     { jobId: `synthesize-${taskId}` }
   );
 }

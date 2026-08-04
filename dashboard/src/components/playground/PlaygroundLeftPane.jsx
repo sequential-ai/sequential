@@ -29,6 +29,8 @@ export default function PlaygroundLeftPane({
         mode,
         isStructuredOutput,
         schemaTemplate,
+        responseFormat,
+        includeTrace,
         location,
         language,
         dateRange,
@@ -47,6 +49,8 @@ export default function PlaygroundLeftPane({
         setMode,
         setIsStructuredOutput,
         setSchemaTemplate,
+        setResponseFormat,
+        setIncludeTrace,
         setLocation,
         setLanguage,
         setDateRange,
@@ -217,32 +221,67 @@ export default function PlaygroundLeftPane({
                     /* Task Controls */
                     <div className="space-y-3 pt-1">
 
+                        {/* Response Format Selector */}
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Response Format</label>
+                            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                                {[
+                                    { id: 'markdown', label: 'Markdown', hint: 'Rich text' },
+                                    { id: 'json', label: 'JSON', hint: 'Structured' },
+                                ].map((fmt) => (
+                                    <button
+                                        key={fmt.id}
+                                        type="button"
+                                        onClick={() => setResponseFormat(fmt.id)}
+                                        className={`flex flex-col items-center py-1.5 px-2 rounded-lg text-[10px] font-mono font-semibold uppercase transition-all cursor-pointer text-center ${
+                                            responseFormat === fmt.id
+                                                ? 'bg-white dark:bg-zinc-800 text-primary shadow-xs border border-zinc-200 dark:border-zinc-700/60'
+                                                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                                        }`}
+                                    >
+                                        <span>{fmt.label}</span>
+                                        <span className={`text-[9px] font-normal normal-case mt-0.5 ${
+                                            responseFormat === fmt.id ? 'text-primary/70' : 'text-zinc-400'
+                                        }`}>{fmt.hint}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                                The LLM generates only <strong className="text-zinc-600 dark:text-zinc-400">{responseFormat}</strong> — no double generation, no wasted tokens.
+                            </p>
+                        </div>
 
-                        {/* Structured Output Toggle */}
-                        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/60 space-y-2">
-                            <label className="flex items-center justify-between cursor-pointer select-none text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:white">
-                                <span className="font-mono text-xs">{'{ }'} Structured JSON output</span>
+                        {/* JSON Schema Template (only when format = json) */}
+                        {responseFormat === 'json' && (
+                            <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 space-y-1">
+                                <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
+                                    <span>TaskSpec Schema</span>
+                                    <span className="text-zinc-400 dark:text-zinc-500">JSON</span>
+                                </div>
+                                <Textarea
+                                    value={schemaTemplate}
+                                    onChange={(e) => setSchemaTemplate(e.target.value)}
+                                    rows={3}
+                                    className="font-mono text-[11px] rounded-lg bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-2 text-zinc-800 dark:text-zinc-200 resize-none focus-visible:ring-0"
+                                />
+                            </div>
+                        )}
+
+                        {/* Include Trace Toggle */}
+                        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/60 space-y-1">
+                            <label className="flex items-center justify-between cursor-pointer select-none text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-mono text-xs">Include Reasoning Trace</span>
+                                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">
+                                        {includeTrace ? 'Returns basis, citations & confidence' : 'Omit trace — smaller payload'}
+                                    </span>
+                                </div>
                                 <Switch
-                                    checked={isStructuredOutput}
-                                    onCheckedChange={setIsStructuredOutput}
-                                    className="scale-90"
+                                    checked={includeTrace}
+                                    onCheckedChange={setIncludeTrace}
+                                    className="scale-90 shrink-0"
                                 />
                             </label>
-
-                            {isStructuredOutput && (
-                                <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 space-y-1">
-                                    <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
-                                        <span>TaskSpec Schema</span>
-                                        <span className="text-zinc-400 dark:text-zinc-500">JSON</span>
-                                    </div>
-                                    <Textarea
-                                        value={schemaTemplate}
-                                        onChange={(e) => setSchemaTemplate(e.target.value)}
-                                        rows={3}
-                                        className="font-mono text-[11px] rounded-lg bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-2 text-zinc-800 dark:text-zinc-200 resize-none focus-visible:ring-0"
-                                    />
-                                </div>
-                            )}
                         </div>
                     </div>
                 )}

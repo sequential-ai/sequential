@@ -65,7 +65,7 @@ async function failWorkerRun(runId, error) {
 const worker = new Worker(
   "researchQueue",
   async (job) => {
-    const { taskId, organizationId, query, mode = "STANDARD", taskSpec = null } = job.data;
+    const { taskId, organizationId, query, mode = "STANDARD", taskSpec = null, responseFormat = "markdown" } = job.data;
     
     const taskContext = getOrCreateContext(taskId);
     
@@ -256,6 +256,7 @@ const worker = new Worker(
         const result = await synthesizer.execute(taskId, {
           query,
           taskSpec,
+          responseFormat,
           facts: topMemories.map(m => m.content),
           sources: processedSources.map(s => `[${s.id}] ${s.url}`)
         }, taskContext);
@@ -331,12 +332,13 @@ async function checkAndTriggerSynthesize(job) {
       const { taskId, organizationId, taskSpec } = job.data;
       const task = await prisma.task.findUnique({ where: { id: taskId } });
       if (task && task.status !== "COMPLETED" && task.status !== "FAILED" && task.status !== "SYNTHESIZING") {
+        const responseFormat = task.input?.responseFormat || "markdown";
         const isSynthesizeEnqueued = [...activeJobs, ...waitingJobs, ...delayedJobs].some(
           j => j.data?.taskId === taskId && j.name === "SYNTHESIZE"
         );
         
         if (!isSynthesizeEnqueued) {
-          await enqueueSynthesizeJob(taskId, organizationId, task.query, taskSpec);
+          await enqueueSynthesizeJob(taskId, organizationId, task.query, taskSpec, responseFormat);
         }
       }
     }
