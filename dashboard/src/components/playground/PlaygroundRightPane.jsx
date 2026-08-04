@@ -5,6 +5,9 @@ import { Check, Copy, Radio, Network, FileText, Code2, Layers, RotateCw, Search,
 import CodeDialog from '@/components/CodeDialog'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import ReactJsonModule from 'react-json-view'
+const ReactJson = ReactJsonModule.default || ReactJsonModule
+import { useTheme } from '@/context/ThemeContext'
 
 // ─── Collapsible Reasoning Trace (Basis) Block ───────────────────────────────
 function BasisBlock({ basis }) {
@@ -122,6 +125,8 @@ export default function PlaygroundRightPane({
         similarityThreshold,
         extractRelations,
     } = state
+
+    const { theme } = useTheme()
 
     const {
         setOutputFormat,
@@ -313,10 +318,20 @@ export default function PlaygroundRightPane({
 
                         {/* View: Raw JSON */}
                         {outputFormat === 'json' && (
-                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/70 p-4 font-mono text-xs overflow-x-auto shadow-inner">
-                                <pre className="text-zinc-800 dark:text-zinc-300">
-                                    <code>{JSON.stringify(currentResult, null, 2)}</code>
-                                </pre>
+                                <div className="rounded-xl border bg-[#1e1e1e]  dark:border-zinc-800 font-mono text-xs overflow-auto shadow-inner h-[80vh] w-full p-4">
+                                <ReactJson 
+                                    src={currentResult}
+                                    theme="monokai"
+                                    iconStyle="triangle"
+                                    collapsed={false}
+                                    shouldCollapse={(field) => {
+                                       return field.name === 'execution'
+                                    }}
+                                    enableClipboard={false}
+                                    displayDataTypes={false}
+                                        displayObjectSize={true}
+                                    style={{backgroundColor:'transparent'}}
+                                />
                             </div>
                         )}
 
