@@ -2,26 +2,36 @@ class TaskExecutionContext {
   constructor(taskId) {
     this.taskId = taskId;
     this.state = {
-      tokens: { prompt: 0, completion: 0, cached: 0, total: 0 },
-      cost: { planning: 0, search: 0, extraction: 0, synthesis: 0, total: 0 },
       sources: { discovered: 0, fetched: 0, failed: 0 },
       facts: 0,
       workers: { running: 0, completed: 0, failed: 0 }
     };
+    this.workerUsages = new Map();
   }
 
-  recordTokens(prompt = 0, completion = 0, cached = 0) {
-    this.state.tokens.prompt += prompt;
-    this.state.tokens.completion += completion;
-    this.state.tokens.cached += cached;
-    this.state.tokens.total += (prompt + completion + cached);
+  recordWorkerUsage(workerId, tokens = { prompt: 0, completion: 0, cached: 0, total: 0 }, cost = 0) {
+    this.workerUsages.set(workerId, { tokens, cost });
   }
 
-  recordCost(category, amount) {
-    if (this.state.cost[category] !== undefined) {
-      this.state.cost[category] += amount;
+  getTokens() {
+    const tokens = { input: 0, output: 0, cached: 0, total: 0 };
+    for (const usage of this.workerUsages.values()) {
+      if (usage.tokens) {
+        tokens.input += usage.tokens.input || usage.tokens.prompt || 0;
+        tokens.output += usage.tokens.output || usage.tokens.completion || 0;
+        tokens.cached += usage.tokens.cached || 0;
+        tokens.total += usage.tokens.total || 0;
+      }
     }
-    this.state.cost.total += amount;
+    return tokens;
+  }
+
+  getCost() {
+    let total = 0;
+    for (const usage of this.workerUsages.values()) {
+      total += usage.cost || 0;
+    }
+    return { total };
   }
 
   recordSource(status) {
@@ -49,7 +59,11 @@ class TaskExecutionContext {
   }
 
   getMetrics() {
-    return { ...this.state };
+    return { 
+      ...this.state, 
+      tokens: this.getTokens(), 
+      cost: this.getCost() 
+    };
   }
 }
 

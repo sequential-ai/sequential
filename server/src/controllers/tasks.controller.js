@@ -74,19 +74,19 @@ const createTask = async (req, res) => {
     );
 
     res.status(201).json({
-      run: {
-        run_id: task.id,
-        status: task.status,
-        mode: task.mode,
-        processor: task.mode,
-        metadata: {
-          responseFormat: responseFormat.toLowerCase(),
-          includeTrace: Boolean(includeTrace),
-        },
-        created_at: task.createdAt,
-        modified_at: task.updatedAt,
-      },
+      id: task.id,
+      run_id: task.id,
+      status: task.status,
+      mode: task.mode,
       output: null,
+      sources: [],
+      usage: {
+        tokens: { input: 0, output: 0, cached: 0, total: 0 },
+        cost: 0,
+        duration_ms: null
+      },
+      created_at: task.createdAt,
+      completed_at: null
     });
   } catch (err) {
     console.error("Error creating task:", err);
@@ -138,37 +138,93 @@ const getTaskStatus = async (req, res) => {
 
     const isCompleted = task.status === "COMPLETED";
 
-    res.json({
-      run: {
-        run_id: task.id,
-        status: task.status,
-        mode: task.mode,
-        processor: task.mode,
-        metadata: {
-          responseFormat,
-          includeTrace,
-          workerCount: task.workerRuns?.length || 0,
-        },
-        execution: {
-          workerRuns: task.workerRuns || [],
-          costTotal: task.costTotal,
-          tokensUsed: task.tokensUsed,
-          executionTimeMs: task.executionTimeMs,
-        },
-        created_at: task.createdAt,
-        modified_at: task.updatedAt,
-        completed_at: task.completedAt || null,
-      },
+    const usage = {
+      tokens: task.usage?.tokens || { input: 0, output: 0, cached: 0, total: task.tokensUsed || 0 },
+      cost: Number(task.billableCost || task.costTotal || 0),
+      duration_ms: task.executionTimeMs || null
+    };
+
+    const includes = (req.query.include || "").split(",");
+    const includeMetadata = includes.includes("metadata");
+    const includeTraceData = includes.includes("trace");
+
+    const responsePayload = {
+      id: task.id,
+      run_id: task.id,
+      status: task.status,
+      mode: task.mode,
       output: isCompleted
         ? {
             type: responseFormat,
             content: task.output?.answer || task.resultAnswer || null,
-            // `basis` key is only present when includeTrace=true to keep
-            // the default payload as lightweight as possible.
             ...(basis !== undefined && { basis }),
           }
         : null,
-    });
+      sources: taskSources,
+      usage,
+      created_at: task.createdAt,
+      completed_at: task.completedAt || null,
+    };
+
+    if (includeMetadata) {
+      const exec = task.execution || {};
+      responsePayload.metadata = {
+        run: {
+          id: task.id,
+          attempt: 1,
+          status: task.status,
+          started_at: task.startedAt || task.createdAt,
+          completed_at: task.completedAt || null,
+          duration_ms: task.executionTimeMs || null
+        },
+        executionSummary: {
+          workers: {
+            total: task.workerRuns?.length || 0,
+            completed: task.workerRuns?.filter(r => r.status === "COMPLETED").length || 0,
+            failed: task.workerRuns?.filter(r => r.status === "FAILED").length || 0
+          },
+          searches: exec.metrics?.sources?.discovered || 0,
+          sources: {
+            discovered: exec.metrics?.sources?.discovered || 0,
+            fetched: exec.metrics?.sources?.fetched || 0,
+            failed: exec.metrics?.sources?.failed || 0
+          },
+          facts: {
+            extracted: exec.metrics?.facts || 0
+          }
+        }
+      };
+    }
+
+    if (includeTraceData) {
+      responsePayload.trace = {
+        workers: (task.workerRuns || []).map((run, index) => {
+          const w = {
+            sequence: index + 1,
+            id: run.id,
+            type: run.workerType.toLowerCase(),
+            status: run.status.toLowerCase(),
+            started_at: run.startedAt,
+            completed_at: run.completedAt,
+            duration_ms: run.durationMs,
+          };
+          if (run.usage && run.usage.tokens && run.usage.tokens.total > 0) {
+            w.usage = { tokens: run.usage.tokens };
+          } else if (run.tokensUsed > 0) {
+            w.usage = { tokens: { input: 0, output: 0, total: run.tokensUsed } };
+          }
+          if (run.status === "FAILED") {
+            w.error = {
+              code: "WORKER_FAILED",
+              message: run.errorMessage || "Worker failed during execution"
+            };
+          }
+          return w;
+        })
+      };
+    }
+
+    res.json(responsePayload);
   } catch (err) {
     console.error("Error fetching task:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -194,32 +250,26 @@ const getTasks = async (req, res) => {
       const includeTrace = Boolean(taskInput.includeTrace);
       const isCompleted = task.status === "COMPLETED";
 
+      const usage = {
+        tokens: task.usage?.tokens || { input: 0, output: 0, cached: 0, total: task.tokensUsed || 0 },
+        cost: Number(task.billableCost || task.costTotal || 0),
+        duration_ms: task.executionTimeMs || null
+      };
+
       return {
         id: task.id,
+        run_id: task.id,
         category: 'task',
         query: task.query,
-        run: {
-          run_id: task.id,
-          status: task.status,
-          mode: task.mode,
-          processor: task.mode,
-          metadata: {
-            responseFormat,
-            includeTrace,
-          },
-          execution: {
-            costTotal: task.costTotal,
-            tokensUsed: task.tokensUsed,
-            executionTimeMs: task.executionTimeMs,
-          },
-          created_at: task.createdAt,
-          modified_at: task.updatedAt,
-          completed_at: task.completedAt || null,
-        },
+        status: task.status,
+        mode: task.mode,
         output: isCompleted ? {
             type: responseFormat,
             content: task.output?.answer || task.resultAnswer || null,
-        } : null
+        } : null,
+        usage,
+        created_at: task.createdAt,
+        completed_at: task.completedAt || null,
       };
     });
 

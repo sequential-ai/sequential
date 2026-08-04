@@ -282,10 +282,10 @@ export default function Playground() {
                 if (res.data) {
                     const taskData = res.data;
                     const generatedResult = {
-                        id: taskData.run?.run_id || id,
+                        id: taskData.id || taskData.run_id || id,
                         category: normalizedCategory,
-                        query: taskData.query || taskData.run?.input?.query || 'Loaded Task',
-                        run: taskData.run || taskData,
+                        query: taskData.query || 'Loaded Task',
+                        run: taskData, // map flattened task directly as run 
                         output: taskData.output
                     };
                     setCurrentResult(generatedResult);
@@ -365,7 +365,7 @@ export default function Playground() {
                     includeTrace
                 })
 
-                const taskId = res.data?.run?.run_id
+                const taskId = res.data?.id || res.data?.run_id || res.data?.run?.run_id
                 if (!taskId) {
                     throw new Error("No task ID returned")
                 }
@@ -378,16 +378,16 @@ export default function Playground() {
                         const statusRes = await api.getTaskStatus(taskId)
                         const taskData = statusRes.data
 
-                        const status = taskData?.run?.status
+                        const status = taskData?.status || taskData?.run?.status
                         if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELED') {
                             clearInterval(pollInterval)
 
                             // Map backend task to playground result structure
                             const generatedResult = {
-                                id: taskData.run.run_id,
+                                id: taskData.id || taskData?.run?.run_id,
                                 category: 'task',
                                 query: prompt,
-                                run: taskData.run,
+                                run: taskData, // map flattened task directly as run 
                                 output: taskData.output
                             }
 
@@ -428,8 +428,8 @@ export default function Playground() {
                         status: 'ACTIVE',
                         mode,
                         processor: mode,
-                        metadata: { responseFormat: 'markdown', includeTrace: false, workerCount: 4 },
-                        execution: { costTotal: 0.0014, tokensUsed: 1420, executionTimeMs: 40 },
+                        metadata: { responseFormat: 'markdown', includeTrace: false },
+                        usage: { cost: 0.0014, tokens: { total: 1420 }, duration_ms: 40 },
                         created_at: now,
                         modified_at: now,
                         completed_at: null,
@@ -469,8 +469,8 @@ export default function Playground() {
                         status: 'COMPLETED',
                         mode,
                         processor: mode,
-                        metadata: { responseFormat: 'markdown', includeTrace: false, workerCount: 2 },
-                        execution: { costTotal: 0.0072, tokensUsed: 7200, executionTimeMs: 1100 },
+                        metadata: { responseFormat: 'markdown', includeTrace: false },
+                        usage: { cost: 0.0072, tokens: { total: 7200 }, duration_ms: 1100 },
                         created_at: now,
                         modified_at: now,
                         completed_at: now,

@@ -140,10 +140,11 @@ export default function PlaygroundRightPane({
     // ── Derived helpers pulling from the new { run, output } envelope ──
     const run = currentResult?.run
     const output = currentResult?.output
-    const durationMs = run?.execution?.executionTimeMs
+    const usage = run?.usage || currentResult?.usage
+    const durationMs = usage?.duration_ms
     const durationLabel = durationMs != null ? `${(durationMs / 1000).toFixed(2)}s` : null
-    const tokensLabel = run?.execution?.tokensUsed
-    const costLabel = run?.execution?.costTotal
+    const tokensLabel = usage?.tokens?.total
+    const costLabel = usage?.cost
 
     return (
         <div
@@ -344,13 +345,13 @@ export default function PlaygroundRightPane({
                                         Duration: <strong className="text-zinc-900 dark:text-zinc-100">{durationLabel ?? '—'}</strong>
                                     </span>
                                     <span className="font-mono text-zinc-600 dark:text-zinc-400">
-                                        Workers: <strong className="text-zinc-900 dark:text-zinc-100">{run?.metadata?.workerCount ?? '—'}</strong>
+                                        Workers: <strong className="text-zinc-900 dark:text-zinc-100">{run?.metadata?.executionSummary?.workers?.total ?? '—'}</strong>
                                     </span>
                                     <span className="font-mono text-zinc-600 dark:text-zinc-400">
-                                        Format: <strong className="text-zinc-900 dark:text-zinc-100">{run?.metadata?.responseFormat ?? '—'}</strong>
+                                        Format: <strong className="text-zinc-900 dark:text-zinc-100">{responseFormat || '—'}</strong>
                                     </span>
                                     <span className="font-mono text-zinc-600 dark:text-zinc-400">
-                                        Trace: <strong className={run?.metadata?.includeTrace ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}>{run?.metadata?.includeTrace ? 'enabled' : 'disabled'}</strong>
+                                        Trace: <strong className={includeTrace ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}>{includeTrace ? 'enabled' : 'disabled'}</strong>
                                     </span>
                                 </div>
                                 <div className="space-y-2">

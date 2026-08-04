@@ -499,11 +499,15 @@ model Task {
   sources         Json?
   metadata        Json?
   costTotal       Decimal    @default(0) @db.Decimal(12, 6)
+  actualCost      Decimal    @default(0) @db.Decimal(12, 6)
+  billableCost    Decimal    @default(0) @db.Decimal(12, 6)
   tokensUsed      Int        @default(0)
   executionTimeMs Int?
+  usage           Json?
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
   completedAt DateTime?
   canceledAt  DateTime?
   deletedAt   DateTime?
@@ -544,6 +548,7 @@ model WorkerRun {
   tokensUsed   Int        @default(0)
   retryCount   Int        @default(0)
   logs         Json?
+  usage        Json?
 
   startedAt   DateTime  @default(now())
   completedAt DateTime?

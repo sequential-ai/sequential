@@ -67,6 +67,7 @@ class OpenRouterWorker {
 
     if (request.stream && typeof request.onChunk === 'function') {
       let fullContent = "";
+      let finalUsage = null;
       const decoder = new TextDecoder();
       
       if (!response.ok) {
@@ -95,6 +96,9 @@ class OpenRouterWorker {
                 fullContent += delta;
                 request.onChunk(delta);
               }
+              if (data.usage) {
+                finalUsage = data.usage;
+              }
             } catch (e) {
               // Ignore parse errors for fragmented SSE lines
             }
@@ -106,7 +110,7 @@ class OpenRouterWorker {
         provider: "openrouter",
         model: request.model,
         content: fullContent,
-        usage: null, // Streaming doesn't always provide usage upfront without extra options
+        usage: normalizeUsage(finalUsage),
         finishReason: null,
       };
     }
@@ -135,7 +139,7 @@ class OpenRouterWorker {
       provider: "openrouter",
       model: payload.model || request.model,
       content,
-      usage: payload.usage || null,
+      usage: normalizeUsage(payload.usage),
       finishReason: choice.finish_reason || null,
       raw: payload,
     };
@@ -179,7 +183,10 @@ function toChatRequest(request) {
   if (request.temperature !== undefined) body.temperature = request.temperature;
   if (request.maxTokens !== undefined) body.max_tokens = request.maxTokens;
   if (request.responseFormat) body.response_format = request.responseFormat;
-  if (request.stream) body.stream = true;
+  if (request.stream) {
+    body.stream = true;
+    body.stream_options = { include_usage: true };
+  }
 
   return body;
 }
@@ -213,6 +220,17 @@ function parseJsonContent(content, code) {
       cause: error,
     });
   }
+}
+
+function normalizeUsage(usage) {
+  if (!usage) return null;
+  return {
+    input: usage.prompt_tokens || 0,
+    output: usage.completion_tokens || 0,
+    cached: usage.prompt_tokens_details?.cached_tokens || 0,
+    total: usage.total_tokens || 0,
+    cost: usage.cost || 0,
+  };
 }
 
 module.exports = {

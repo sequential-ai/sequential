@@ -37,27 +37,38 @@ async function createWorkerRun(taskId, workerType, provider, model, inputData) {
   });
 }
 
-async function completeWorkerRun(runId, outputData, cost = 0, tokensUsed = 0) {
+async function completeWorkerRun(runId, outputData, cost = 0, usage = null) {
+  const run = await prisma.workerRun.findUnique({ where: { id: runId } });
+  const completedAt = new Date();
+  const durationMs = run && run.startedAt ? completedAt.getTime() - run.startedAt.getTime() : null;
+
   await prisma.workerRun.update({
     where: { id: runId },
     data: {
       status: "COMPLETED",
       output: outputData,
       cost,
-      tokensUsed,
-      completedAt: new Date(),
+      usage,
+      tokensUsed: usage && usage.total ? usage.total : 0,
+      completedAt,
+      durationMs,
     },
   });
 }
 
 async function failWorkerRun(runId, error) {
+  const run = await prisma.workerRun.findUnique({ where: { id: runId } });
+  const completedAt = new Date();
+  const durationMs = run && run.startedAt ? completedAt.getTime() - run.startedAt.getTime() : null;
+
   await prisma.workerRun.update({
     where: { id: runId },
     data: {
       status: "FAILED",
       errorMessage: error.message,
       errorDetails: error.stack ? { stack: error.stack } : {},
-      completedAt: new Date(),
+      completedAt,
+      durationMs,
     },
   });
 }
@@ -72,7 +83,7 @@ const worker = new Worker(
     // Update task status if it's PLAN
     if (job.name === "PLAN") {
       console.log(`[Task ${taskId}] Starting PLAN job (Mode: ${mode}) for query: "${query}"...`);
-      await prisma.task.update({ where: { id: taskId }, data: { status: "PLANNING" } });
+      await prisma.task.update({ where: { id: taskId }, data: { status: "PLANNING", startedAt: new Date() } });
       EventMapper.mapTaskStarted(taskId, mode, query);
       
       const run = await createWorkerRun(taskId, "PLANNER", "openrouter", "gpt-4o-mini", { query, taskSpec });
@@ -85,10 +96,10 @@ const worker = new Worker(
         // planner extends BaseWorker which takes (taskId, input, taskContext)
         const result = await planner.execute(taskId, { query, taskSpec }, taskContext);
         
-        const tokens = result.usage?.total_tokens || 0;
-        taskContext.recordTokens(result.usage?.prompt_tokens, result.usage?.completion_tokens, 0);
-        taskContext.recordCost('planning', 0); // OpenRouter cost logic omitted for brevity
-        await completeWorkerRun(run.id, result, 0, tokens);
+        const tokens = result.usage?.total || 0;
+        const cost = result.usage?.cost || 0;
+        taskContext.recordWorkerUsage('planner', result.usage, cost);
+        await completeWorkerRun(run.id, result, cost, result.usage);
         EventMapper.mapMetricsUpdated(taskId, 'planner', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'planner', { status: 'success' });
         
@@ -116,8 +127,8 @@ const worker = new Worker(
         // Pass Domain Models to Event Mapper
         EventMapper.mapSearchResults(taskId, 'search', domainResults);
         
-        taskContext.recordCost('search', 0.001); // Approx serper cost
-        await completeWorkerRun(run.id, domainResults);
+        taskContext.recordWorkerUsage('search', null, 0.001); // Approx serper cost
+        await completeWorkerRun(run.id, domainResults, 0.001, null);
         EventMapper.mapMetricsUpdated(taskId, 'search', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'search', { status: 'success' });
         
@@ -150,8 +161,8 @@ const worker = new Worker(
         const result = await scraper.execute(taskId, { url }, taskContext);
         
         taskContext.recordSource('fetched');
-        taskContext.recordCost('scrape', 0.0005);
-        await completeWorkerRun(run.id, { title: result.title }); // don't store full content in outputData
+        taskContext.recordWorkerUsage(`scrape_${run.id}`, null, 0.0005);
+        await completeWorkerRun(run.id, { title: result.title }, 0.0005, null); // don't store full content in outputData
         
         EventMapper.mapSourceLifecycle(taskId, 'scraper', url, 'fetched');
         EventMapper.mapMetricsUpdated(taskId, 'scraper', taskContext);
@@ -209,9 +220,9 @@ const worker = new Worker(
           EventPipeline.flushFacts(taskId, 'extract'); // Force flush any remaining batched facts
         }
 
-        taskContext.recordTokens(result.usage?.prompt_tokens, result.usage?.completion_tokens, 0);
-        taskContext.recordCost('extraction', 0);
-        await completeWorkerRun(run.id, { factsCount: result.facts?.length, evidence, sources: extractedSources }, 0, result.usage?.total_tokens || 0);
+        const cost = result.usage?.cost || 0;
+        taskContext.recordWorkerUsage(`extract_${run.id}`, result.usage, cost);
+        await completeWorkerRun(run.id, { factsCount: result.facts?.length, evidence, sources: extractedSources }, cost, result.usage);
         EventMapper.mapMetricsUpdated(taskId, 'extract', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'extract', { status: 'success' });
 
@@ -261,14 +272,16 @@ const worker = new Worker(
           sources: processedSources.map(s => `[${s.id}] ${s.url}`)
         }, taskContext);
 
-        taskContext.recordTokens(result.usage?.prompt_tokens, result.usage?.completion_tokens, 0);
-        taskContext.recordCost('synthesis', 0);
-        await completeWorkerRun(run.id, result, 0, result.usage?.total_tokens || 0);
+        const cost = result.usage?.cost || 0;
+        taskContext.recordWorkerUsage('synthesis', result.usage, cost);
+        await completeWorkerRun(run.id, result, cost, result.usage);
         EventMapper.mapMetricsUpdated(taskId, 'synthesis', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'synthesis', { status: 'success' });
 
         // Fetch all worker runs to compute metrics
         const allRuns = await prisma.workerRun.findMany({ where: { taskId } });
+        const MetricsAggregator = require("../modules/tasks/metricsAggregator");
+        const aggregatedMetrics = MetricsAggregator.aggregate(allRuns);
 
         // Update task output with the result
         const taskOutput = {};
@@ -279,9 +292,13 @@ const worker = new Worker(
         }
 
         const taskExecution = {
-          metrics: taskContext.getMetrics(),
+          metrics: aggregatedMetrics,
           workerRuns: allRuns.map(r => ({ id: r.id, type: r.workerType, status: r.status, duration: r.durationMs }))
         };
+
+        const taskRecord = await prisma.task.findUnique({ where: { id: taskId } });
+        const taskCompletedAt = new Date();
+        const executionTimeMs = taskRecord && taskRecord.startedAt ? taskCompletedAt.getTime() - taskRecord.startedAt.getTime() : null;
 
         await prisma.task.update({
           where: { id: taskId },
@@ -291,10 +308,16 @@ const worker = new Worker(
             output: taskOutput,
             execution: taskExecution,
             sources: processedSources,
-            completedAt: new Date()
+            completedAt: taskCompletedAt,
+            executionTimeMs,
+            actualCost: aggregatedMetrics.actualCost,
+            billableCost: aggregatedMetrics.billableCost,
+            costTotal: aggregatedMetrics.billableCost, // backward compatibility
+            tokensUsed: aggregatedMetrics.tokens.total,
+            usage: aggregatedMetrics
           }
         });
-        EventMapper.mapTaskCompleted(taskId, 'success', taskExecution.metrics.cost.totalDurationMs || 0);
+        EventMapper.mapTaskCompleted(taskId, 'success', executionTimeMs || 0);
         destroyContext(taskId);
         console.log(`[Task ${taskId}] SYNTHESIZE complete! Task finished successfully.`);
 
