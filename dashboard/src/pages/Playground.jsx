@@ -79,8 +79,12 @@ import { FaPython } from "react-icons/fa";
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { useTheme } from '@/context/ThemeContext'
 import CodeDialog from '@/components/CodeDialog'
+import PlaygroundHeader from '@/components/playground/PlaygroundHeader'
+import PlaygroundHistory from '@/components/playground/PlaygroundHistory'
+import PlaygroundLeftPane from '@/components/playground/PlaygroundLeftPane'
+import PlaygroundRightPane from '@/components/playground/PlaygroundRightPane'
 
-const API_CATEGORIES = [
+export const API_CATEGORIES = [
     {
         id: 'task',
         label: 'Task API',
@@ -128,7 +132,7 @@ const API_CATEGORIES = [
     },
 ]
 
-const INITIAL_HISTORY = [
+export const INITIAL_HISTORY = [
     {
         id: 'tsk_9f83a1b2',
         category: 'task',
@@ -538,6 +542,56 @@ export default function Playground() {
 
 
 
+    const playgroundState = {
+        activeCategoryMeta,
+        normalizedCategory,
+        prompt,
+        mode,
+        isStructuredOutput,
+        schemaTemplate,
+        location,
+        language,
+        dateRange,
+        alertThreshold,
+        webhookUrl,
+        pollingInterval,
+        namespace,
+        topK,
+        similarityThreshold,
+        extractRelations,
+        isRunning,
+        currentResult,
+        isOutputCopied,
+        outputFormat,
+        executionStep,
+        isCodeModalOpen,
+    }
+
+    const playgroundSetters = {
+        setPrompt,
+        setMode,
+        setIsStructuredOutput,
+        setSchemaTemplate,
+        setLocation,
+        setLanguage,
+        setDateRange,
+        setAlertThreshold,
+        setWebhookUrl,
+        setPollingInterval,
+        setNamespace,
+        setTopK,
+        setSimilarityThreshold,
+        setExtractRelations,
+        setOutputFormat,
+        setIsCodeModalOpen,
+    }
+
+    const playgroundHandlers = {
+        handleKeyDown,
+        handleRunTask,
+        handleCopyCurrentOutput,
+    }
+
     return (
         <Skeleton
             name="tasks-page"
@@ -546,540 +600,27 @@ export default function Playground() {
             className="w-full min-w-0 h-screen flex flex-col overflow-hidden"
         >
             <div className="w-full h-screen flex flex-col overflow-hidden bg-[#FAF8F5] dark:bg-zinc-950">
-                {/* Top Category Navigation Bar (Height: 48px / h-12) */}
-                <div className="h-12 flex items-center justify-between px-4 border-b border-zinc-200 dark:border-zinc-800/80 bg-[#FAF8F5] dark:bg-zinc-950 shrink-0">
-                    {/* Top API Mode Tabs + Sidebar Trigger */}
-                    <div className="flex items-center gap-1 sm:gap-2">
-                        <SidebarTrigger className="-ml-1 h-7 w-7 mr-1 cursor-pointer text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white" />
-                        {API_CATEGORIES.map((cat) => {
-                            const Icon = cat.icon
-                            const isActive = normalizedCategory === cat.id
-                            return (
-                                <Link
-                                    key={cat.id}
-                                    to={`/dashboard/playground/${cat.id}`}
-                                    onClick={() => setActiveView('playground')}
-                                    className={`relative px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${isActive
-                                        ? 'text-zinc-950 dark:text-white bg-zinc-100 dark:bg-zinc-900 shadow-xs'
-                                        : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40'
-                                        }`}
-                                >
-                                    <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-primary' : 'text-zinc-400 dark:text-zinc-500'}`} />
-                                    <span>{cat.label}</span>
-                                    {isActive && (
-                                        <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
-                                    )}
-                                </Link>
-                            )
-                        })}
-                    </div>
+                <PlaygroundHeader
+                    normalizedCategory={normalizedCategory}
+                    setActiveView={setActiveView}
+                    activeView={activeView}
+                    theme={theme}
+                    toggle={toggle}
+                />
 
-                    {/* Right Header Controls: Theme Toggle & History */}
-                    <div className="flex items-center gap-2">
-                        {/* Theme toggle */}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={toggle}
-                            className="h-7 w-7 rounded text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
-                            title="Toggle theme"
-                        >
-                            {theme === 'dark' ? (
-                                <Sun className="h-3.5 w-3.5" />
-                            ) : (
-                                <Moon className="h-3.5 w-3.5" />
-                            )}
-                        </Button>
-
-                        <button
-                            type="button"
-                            onClick={() => setActiveView(activeView === 'playground' ? 'history' : 'playground')}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold font-mono uppercase transition-all cursor-pointer border ${activeView === 'history'
-                                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 border-zinc-900 dark:border-zinc-100 shadow-xs'
-                                : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 bg-white dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-900'
-                                }`}
-                        >
-                            <Clock className="h-3.5 w-3.5" />
-                            HISTORY
-                        </button>
-                    </div>
-                </div>
-
-                {/* Main View: Resizable Playground Split Pane (Height: 100vh - Top Header Height 48px) */}
                 {activeView === 'playground' && (
                     <div
                         ref={containerRef}
                         className="relative flex flex-col lg:flex-row w-full h-[calc(100vh-48px)] bg-[#FAF8F5] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden"
                     >
-                        {/* ========================================================
-                LEFT PANE: Configuration & Query Inputs
-                ======================================================== */}
-                        <div
-                            style={{ width: `${leftWidth}%` }}
-                            className="w-full lg:w-auto h-full flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800/80 bg-[#FAF8F5] dark:bg-zinc-950 shrink-0 overflow-y-auto space-y-5 p-5 sm:p-6"
-                        >
-                            <div className="space-y-5">
-                                {/* Header: API Title, Badge, Docs Button, Subtitle */}
-                                <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-                                                {activeCategoryMeta.label}
-                                            </h1>
-                                            <Badge variant="outline" className="font-mono text-[10px] uppercase text-zinc-500 dark:text-zinc-400 border-zinc-300 dark:border-zinc-800">
-                                                {activeCategoryMeta.badge}
-                                            </Badge>
-                                        </div>
+                        <PlaygroundLeftPane
+                            leftWidth={leftWidth}
+                            state={playgroundState}
+                            setters={playgroundSetters}
+                            handlers={playgroundHandlers}
+                        />
 
-                                        <Link
-                                            to="https://docs.sequential.ai"
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-mono font-medium border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors shadow-xs"
-                                        >
-                                            Docs <ExternalLink className="h-3 w-3 text-zinc-400" />
-                                        </Link>
-                                    </div>
-
-                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                                        {activeCategoryMeta.subtitle}
-                                    </p>
-                                </div>
-
-                                {/* Query Input Card */}
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 flex items-center gap-1">
-                                        {normalizedCategory === 'task' && 'Task Query & Spec'}
-                                        {normalizedCategory === 'monitor' && 'Target Stream / Endpoint'}
-                                        {normalizedCategory === 'memory' && 'Semantic Memory Query'}
-                                        <span className="text-red-500 font-bold">*</span>
-                                    </label>
-
-                                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/70 p-3 shadow-xs focus-within:border-primary/50 dark:focus-within:border-zinc-700 transition-all space-y-3">
-                                        <Textarea
-                                            placeholder={
-                                                normalizedCategory === 'task'
-                                                    ? 'Ask any question, summary, extraction, or research topic...'
-                                                    : normalizedCategory === 'monitor'
-                                                        ? 'Enter endpoint URL or telemetry stream spec to monitor...'
-                                                        : 'Enter semantic query or entity retrieval criteria...'
-                                            }
-                                            value={prompt}
-                                            onChange={(e) => setPrompt(e.target.value)}
-                                            onKeyDown={handleKeyDown}
-                                            rows={3}
-                                            className="resize-none border-0 p-0 text-xs sm:text-sm font-sans bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none leading-relaxed"
-                                        />
-
-                                        {/* Bottom row inside Query box: Examples dropdown & Run Button */}
-                                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
-                                            {/* Examples Dropdown */}
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <button
-                                                        type="button"
-                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 bg-zinc-100 dark:bg-zinc-800/50 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer border border-zinc-200 dark:border-zinc-800"
-                                                    >
-                                                        <span>Examples</span>
-                                                        <ChevronDown className="h-3 w-3" />
-                                                    </button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent
-                                                    align="start"
-                                                    className="w-80 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1.5 shadow-2xl"
-                                                >
-                                                    <DropdownMenuLabel className="text-[10px] uppercase font-mono text-zinc-400 px-2 py-1">
-                                                        Sample Queries ({activeCategoryMeta.label})
-                                                    </DropdownMenuLabel>
-                                                    <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
-                                                    {activeCategoryMeta.prompts.map((sample, i) => (
-                                                        <DropdownMenuItem
-                                                            key={i}
-                                                            onClick={() => setPrompt(sample)}
-                                                            className="text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer py-1.5 px-2"
-                                                        >
-                                                            {sample}
-                                                        </DropdownMenuItem>
-                                                    ))}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-
-                                            {/* ▶ Run Button */}
-                                            <Button
-                                                size="sm"
-                                                disabled={!prompt.trim() || isRunning}
-                                                onClick={handleRunTask}
-                                                className="rounded h-7 px-3.5 text-xs font-bold uppercase text-white shadow-xs cursor-pointer flex items-center gap-1.5 font-mono transition-all hover:scale-102 active:scale-98 bg-primary hover:bg-primary/90"
-                                            >
-                                                {isRunning ? (
-                                                    <>
-                                                        <RotateCw className="h-3 w-3 animate-spin" />
-                                                        <span>Running</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Play className="h-3 w-3 fill-current" />
-                                                        <span>Run {activeCategoryMeta.label.split(' ')[0]}</span>
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* ===================================================
-                                    CATEGORY-SPECIFIC CONTROLS & FILTERS
-                                =================================================== */}
-
-                                {normalizedCategory === 'task' && (
-                                    /* Task Controls */
-                                    <div className="space-y-3 pt-1">
-                                        {/* Location & Language Row */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Location</label>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                                        >
-                                                            <span className="truncate">{location}</span>
-                                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-56 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                                        {['US — United States', 'EU — European Union', 'GB — United Kingdom', 'Global — Worldwide'].map((loc) => (
-                                                            <DropdownMenuItem
-                                                                key={loc}
-                                                                onClick={() => setLocation(loc)}
-                                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                                            >
-                                                                {loc}
-                                                            </DropdownMenuItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Language</label>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                                        >
-                                                            <span className="truncate">{language}</span>
-                                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                                        {['en — English', 'es — Spanish', 'de — German', 'fr — French', 'ja — Japanese'].map((lang) => (
-                                                            <DropdownMenuItem
-                                                                key={lang}
-                                                                onClick={() => setLanguage(lang)}
-                                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                                            >
-                                                                {lang}
-                                                            </DropdownMenuItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-                                        </div>
-
-                                        {/* Published Date Range */}
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Published date range</label>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <button
-                                                        type="button"
-                                                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                                    >
-                                                        <span className="truncate">{dateRange === 'Any time' ? 'Select date range' : dateRange}</span>
-                                                        <Calendar className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                                    </button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent className="w-56 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                                    {['Any time', 'Past 24 hours', 'Past week', 'Past month', 'Past year'].map((d) => (
-                                                        <DropdownMenuItem
-                                                            key={d}
-                                                            onClick={() => setDateRange(d)}
-                                                            className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                                        >
-                                                            {d}
-                                                        </DropdownMenuItem>
-                                                    ))}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-
-                                        {/* Speed / Depth Mode Selector */}
-                                        <div className="space-y-1 pt-1">
-                                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Execution Depth</label>
-                                            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                                                {[
-                                                    { id: 'FAST', label: 'FAST', desc: '1 worker' },
-                                                    { id: 'STANDARD', label: 'STANDARD', desc: '4 workers' },
-                                                    { id: 'DEEP', label: 'DEEP', desc: '6 DAGs' },
-                                                ].map((item) => (
-                                                    <button
-                                                        key={item.id}
-                                                        type="button"
-                                                        onClick={() => setMode(item.id)}
-                                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-mono font-semibold uppercase transition-all cursor-pointer text-center ${mode === item.id
-                                                            ? 'bg-white dark:bg-zinc-800 text-primary shadow-xs border border-zinc-200 dark:border-zinc-700/60 font-bold'
-                                                            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                                                            }`}
-                                                    >
-                                                        {item.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Structured Output Toggle */}
-                                        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/60 space-y-2">
-                                            <label className="flex items-center justify-between cursor-pointer select-none text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:white">
-                                                <span className="font-mono text-xs">{'{ }'} Structured JSON output</span>
-                                                <Switch
-                                                    checked={isStructuredOutput}
-                                                    onCheckedChange={setIsStructuredOutput}
-                                                    className="scale-90"
-                                                />
-                                            </label>
-
-                                            {isStructuredOutput && (
-                                                <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 space-y-1">
-                                                    <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
-                                                        <span>TaskSpec Schema</span>
-                                                        <span className="text-zinc-400 dark:text-zinc-500">JSON</span>
-                                                    </div>
-                                                    <Textarea
-                                                        value={schemaTemplate}
-                                                        onChange={(e) => setSchemaTemplate(e.target.value)}
-                                                        rows={3}
-                                                        className="font-mono text-[11px] rounded-lg bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-2 text-zinc-800 dark:text-zinc-200 resize-none focus-visible:ring-0"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {normalizedCategory === 'monitor' && (
-                                    /* Monitor Controls */
-                                    <div className="space-y-3 pt-1">
-                                        {/* Stream Mode Selector */}
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Stream Ingestion Mode</label>
-                                            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                                                {[
-                                                    { id: 'REALTIME', label: 'REALTIME', desc: '50ms' },
-                                                    { id: 'CONTINUOUS', label: 'CONTINUOUS', desc: '1s poll' },
-                                                    { id: 'CRON', label: 'SCHEDULED', desc: 'Hourly' },
-                                                ].map((item) => (
-                                                    <button
-                                                        key={item.id}
-                                                        type="button"
-                                                        onClick={() => setMode(item.id)}
-                                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-mono font-semibold uppercase transition-all cursor-pointer text-center ${mode === item.id
-                                                            ? 'bg-white dark:bg-zinc-800 text-primary shadow-xs border border-zinc-200 dark:border-zinc-700/60 font-bold'
-                                                            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                                                            }`}
-                                                    >
-                                                        {item.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Alert Threshold & Polling Interval */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Anomaly Threshold</label>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                                        >
-                                                            <span className="truncate font-mono">{alertThreshold}</span>
-                                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-56 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                                        {['p99 > 250ms', 'Error Rate > 1.0%', '5xx Spikes (Instant)', 'Anomaly Sigma > 3'].map((item) => (
-                                                            <DropdownMenuItem
-                                                                key={item}
-                                                                onClick={() => setAlertThreshold(item)}
-                                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer font-mono"
-                                                            >
-                                                                {item}
-                                                            </DropdownMenuItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Probe Frequency</label>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                                        >
-                                                            <span className="truncate">{pollingInterval}</span>
-                                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                                        {['10 seconds', '30 seconds', '1 minute', '5 minutes'].map((item) => (
-                                                            <DropdownMenuItem
-                                                                key={item}
-                                                                onClick={() => setPollingInterval(item)}
-                                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                                            >
-                                                                {item}
-                                                            </DropdownMenuItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-                                        </div>
-
-                                        {/* Webhook Dispatch Target */}
-                                        <div className="space-y-1 pt-1">
-                                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Webhook Dispatch Target</label>
-                                            <Input
-                                                value={webhookUrl}
-                                                onChange={(e) => setWebhookUrl(e.target.value)}
-                                                placeholder="https://api.yourdomain.com/webhooks/alerts"
-                                                className="h-8 text-xs font-mono rounded-xl bg-white dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {normalizedCategory === 'memory' && (
-                                    /* Memory Controls */
-                                    <div className="space-y-3 pt-1">
-                                        {/* Retrieval Engine Mode */}
-                                        <div className="space-y-1">
-                                            <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Context Retrieval Engine</label>
-                                            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                                                {[
-                                                    { id: 'GRAPH_RAG', label: 'GRAPH RAG', desc: 'Entity graph' },
-                                                    { id: 'HYBRID', label: 'HYBRID', desc: 'Dense + BM25' },
-                                                    { id: 'VECTOR_COSINE', label: 'VECTOR', desc: 'Cosine' },
-                                                ].map((item) => (
-                                                    <button
-                                                        key={item.id}
-                                                        type="button"
-                                                        onClick={() => setMode(item.id)}
-                                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-mono font-semibold uppercase transition-all cursor-pointer text-center ${mode === item.id
-                                                            ? 'bg-white dark:bg-zinc-800 text-primary shadow-xs border border-zinc-200 dark:border-zinc-700/60 font-bold'
-                                                            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                                                            }`}
-                                                    >
-                                                        {item.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Namespace & Top-K Row */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Collection Namespace</label>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                                        >
-                                                            <span className="truncate font-mono">{namespace}</span>
-                                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-56 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                                        {['prod-agents', 'user-context', 'knowledge-base', 'system-logs'].map((item) => (
-                                                            <DropdownMenuItem
-                                                                key={item}
-                                                                onClick={() => setNamespace(item)}
-                                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer font-mono"
-                                                            >
-                                                                {item}
-                                                            </DropdownMenuItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">Top-K Density</label>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <button
-                                                            type="button"
-                                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left shadow-xs"
-                                                        >
-                                                            <span className="truncate">{topK}</span>
-                                                            <ChevronDown className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0 ml-1" />
-                                                        </button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-44 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-xl p-1 shadow-xl">
-                                                        {['Top 5', 'Top 10', 'Top 25', 'Top 50'].map((item) => (
-                                                            <DropdownMenuItem
-                                                                key={item}
-                                                                onClick={() => setTopK(item)}
-                                                                className="text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
-                                                            >
-                                                                {item}
-                                                            </DropdownMenuItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-                                        </div>
-
-                                        {/* Similarity Threshold & Graph Triples */}
-                                        <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/60 space-y-2">
-                                            <label className="flex items-center justify-between cursor-pointer select-none text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white">
-                                                <span className="font-mono text-xs">Extract Entity Relations & Graph</span>
-                                                <Switch
-                                                    checked={extractRelations}
-                                                    onCheckedChange={setExtractRelations}
-                                                    className="scale-90"
-                                                />
-                                            </label>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Bottom Helper text */}
-                            <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800/80 text-[11px] text-zinc-500 leading-relaxed">
-                                {normalizedCategory === 'task' && 'Autonomous DAG orchestration with live multi-worker reasoning.'}
-                                {normalizedCategory === 'monitor' && 'High-frequency telemetry probe with sub-50ms anomaly detection.'}
-                                {normalizedCategory === 'memory' && 'Multi-modal vector knowledge graph persistence.'}{' '}
-                                <a
-                                    href="https://docs.sequential.ai"
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-zinc-600 dark:text-zinc-400 underline hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
-                                >
-                                    Read spec docs ↗
-                                </a>
-                            </div>
-                        </div>
-
-                        {/* ========================================================
-                DRAGGABLE DIVIDER / RESIZER HANDLE
-                ======================================================== */}
+                        {/* DRAGGABLE DIVIDER / RESIZER HANDLE */}
                         <div
                             onMouseDown={(e) => {
                                 e.preventDefault()
@@ -1096,380 +637,28 @@ export default function Playground() {
                             </div>
                         </div>
 
-                        {/* ========================================================
-                RIGHT PANE: Full-Height Results Canvas
-                ======================================================== */}
-                        <div
-                            style={{ width: `${100 - leftWidth}%` }}
-                            className="w-full lg:w-auto flex-1 h-full bg-[#FAF8F5] dark:bg-zinc-950 px-5 sm:px-6 py-3.5 flex flex-col justify-between relative overflow-hidden min-h-0"
-                        >
-                            {/* Top Bar of Results Pane */}
-                            <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800/80 gap-3 shrink-0">
-                                {/* Left Actions: Telemetry / Copy / Status */}
-                                <div className="flex items-center gap-2">
-                                    {currentResult && (
-                                        <>
-                                            {/* Telemetry pill */}
-                                            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{currentResult.duration}</span>
-                                                <span>•</span>
-                                                <span>{currentResult.tokens.toLocaleString()} tok</span>
-                                                <span>•</span>
-                                                <span className="text-zinc-700 dark:text-zinc-300">${currentResult.cost.toFixed(4)}</span>
-                                            </div>
-
-                                            {/* Copy Output Button */}
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleCopyCurrentOutput}
-                                                className="rounded h-7 px-2.5 text-xs border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono gap-1 cursor-pointer shadow-xs"
-                                            >
-                                                {isOutputCopied ? <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                                                {isOutputCopied ? 'Copied' : 'Copy'}
-                                            </Button>
-                                        </>
-                                    )}
-                                </div>
-
-                                {/* Format Option Toggle: Markdown | JSON | Trace */}
-                                <div className="flex items-center gap-1 p-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                                    {[
-                                        { id: 'markdown', label: normalizedCategory === 'monitor' ? 'Stream' : normalizedCategory === 'memory' ? 'Entities' : 'Markdown', icon: normalizedCategory === 'monitor' ? Radio : normalizedCategory === 'memory' ? Network : FileText },
-                                        { id: 'json', label: 'JSON', icon: Code2 },
-                                        { id: 'trace', label: 'Trace', icon: Layers },
-                                    ].map((fmt) => {
-                                        const Icon = fmt.icon
-                                        const isSelected = outputFormat === fmt.id
-                                        return (
-                                            <button
-                                                key={fmt.id}
-                                                type="button"
-                                                onClick={() => setOutputFormat(fmt.id)}
-                                                className={`px-3 py-1 rounded text-xs font-mono font-medium transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
-                                                    ? 'bg-white dark:bg-zinc-800 text-zinc-950 dark:text-white shadow-xs border border-zinc-200 dark:border-zinc-700/60 font-semibold'
-                                                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                                                    }`}
-                                            >
-                                                <Icon className={`h-3 w-3 ${isSelected ? 'text-primary' : 'text-zinc-400 dark:text-zinc-500'}`} />
-                                                <span>{fmt.label}</span>
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Center Canvas Area: Empty State, Running State, or Rendered Result */}
-                            <div className="flex-1 overflow-y-auto py-4 min-h-0">
-                                {isRunning ? (
-                                    /* Running / Pipeline Progress */
-                                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-16">
-                                        <div className="relative mx-auto w-12 h-12 flex items-center justify-center">
-                                            <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-ping" />
-                                            <RotateCw className="h-7 w-7 text-primary animate-spin" />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                                                Executing {activeCategoryMeta.label}
-                                            </h3>
-                                            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono animate-pulse">
-                                                {executionStep}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ) : currentResult ? (
-                                    /* Completed Result View */
-                                    <div className="space-y-4 max-w-3xl pb-16">
-                                        {/* View: Primary Markdown / Stream / Entities */}
-                                        {outputFormat === 'markdown' && (
-                                            <div className="space-y-4">
-                                                <div className="prose dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed space-y-3 font-sans text-zinc-800 dark:text-zinc-200">
-                                                    {currentResult.output.answer.split('\n\n').map((para, i) => {
-                                                        if (para.startsWith('### ')) {
-                                                            return (
-                                                                <h3 key={i} className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-100 pt-2 pb-1 border-b border-zinc-200 dark:border-zinc-800/80">
-                                                                    {para.replace('### ', '')}
-                                                                </h3>
-                                                            )
-                                                        }
-                                                        if (para.startsWith('1. ') || para.startsWith('2. ') || para.startsWith('3. ') || para.startsWith('- ')) {
-                                                            return (
-                                                                <div key={i} className="flex items-start gap-2 pl-1">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                                                                    <p className="text-xs sm:text-sm leading-relaxed">{para.replace(/^[0-9]\.\s*|-\s*/, '')}</p>
-                                                                </div>
-                                                            )
-                                                        }
-                                                        return <p key={i} className="text-xs sm:text-sm leading-relaxed">{para}</p>
-                                                    })}
-                                                </div>
-
-                                                {/* Monitor Specific: Live Event Stream Rows */}
-                                                {currentResult.output.events && (
-                                                    <div className="pt-2 space-y-2">
-                                                        <span className="text-[11px] font-mono font-semibold uppercase text-zinc-500 tracking-wider">
-                                                            Live Stream Ingest ({currentResult.output.events.length} Events)
-                                                        </span>
-                                                        <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900/50 shadow-xs font-mono text-xs">
-                                                            {currentResult.output.events.map((evt, i) => (
-                                                                <div key={i} className="p-2.5 flex items-center justify-between gap-2">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                                                                        <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                                                                            {evt.status}
-                                                                        </Badge>
-                                                                        <span className="text-zinc-800 dark:text-zinc-200">{evt.note}</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-3 text-zinc-500 text-[11px]">
-                                                                        <span className="text-emerald-600 dark:text-emerald-400">{evt.latency}</span>
-                                                                        <span>{evt.time}</span>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Memory Specific: Extracted Entities & Graph */}
-                                                {currentResult.output.entities && (
-                                                    <div className="pt-2 space-y-2">
-                                                        <span className="text-[11px] font-mono font-semibold uppercase text-zinc-500 tracking-wider">
-                                                            Matched Entity Nodes ({currentResult.output.entities.length})
-                                                        </span>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                            {currentResult.output.entities.map((ent, i) => (
-                                                                <div
-                                                                    key={i}
-                                                                    className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 shadow-xs space-y-1.5"
-                                                                >
-                                                                    <div className="flex items-center justify-between text-xs">
-                                                                        <Badge variant="outline" className="text-[10px] font-mono text-primary border-primary/30">
-                                                                            {ent.type}
-                                                                        </Badge>
-                                                                        <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                                                                            {(ent.score * 100).toFixed(1)}% match
-                                                                        </span>
-                                                                    </div>
-                                                                    <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{ent.name}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Task Specific: Structured Object validation card */}
-                                                {currentResult.output.structuredData && (
-                                                    <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60 space-y-2">
-                                                        <div className="flex items-center justify-between text-xs">
-                                                            <span className="font-bold text-zinc-900 dark:text-zinc-200">Structured Data Payload</span>
-                                                            <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                                                                Score: {(currentResult.output.structuredData.confidenceScore * 100).toFixed(0)}%
-                                                            </Badge>
-                                                        </div>
-                                                        <pre className="p-2.5 rounded-lg bg-white dark:bg-zinc-950 font-mono text-[11px] text-zinc-800 dark:text-zinc-300 overflow-x-auto border border-zinc-200 dark:border-zinc-800">
-                                                            <code>{JSON.stringify(currentResult.output.structuredData, null, 2)}</code>
-                                                        </pre>
-                                                    </div>
-                                                )}
-
-                                                {/* Verified Sources / Citations */}
-                                                {currentResult.output.sources && currentResult.output.sources.length > 0 && (
-                                                    <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
-                                                        <span className="text-[11px] font-mono font-semibold uppercase text-zinc-500 tracking-wider">
-                                                            Verified Citations ({currentResult.output.sources.length})
-                                                        </span>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                            {currentResult.output.sources.map((src, i) => (
-                                                                <a
-                                                                    key={i}
-                                                                    href={src.url}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300 group shadow-xs"
-                                                                >
-                                                                    <span className="truncate pr-2 font-medium group-hover:text-primary transition-colors">
-                                                                        {src.title}
-                                                                    </span>
-                                                                    <ExternalLink className="h-3 w-3 text-zinc-400 shrink-0" />
-                                                                </a>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* View: Raw JSON */}
-                                        {outputFormat === 'json' && (
-                                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/70 p-4 font-mono text-xs overflow-x-auto shadow-inner">
-                                                <pre className="text-zinc-800 dark:text-zinc-300">
-                                                    <code>{JSON.stringify(currentResult, null, 2)}</code>
-                                                </pre>
-                                            </div>
-                                        )}
-
-                                        {/* View: Execution Trace */}
-                                        {outputFormat === 'trace' && (
-                                            <div className="space-y-3">
-                                                <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between text-xs">
-                                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">Total Duration: <strong className="text-zinc-900 dark:text-zinc-100">{currentResult.duration}</strong></span>
-                                                    <span className="font-mono text-zinc-600 dark:text-zinc-400">Parallel Workers: <strong className="text-zinc-900 dark:text-zinc-100">{currentResult.workerCount}</strong></span>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    {[
-                                                        { step: '1. Intent & Spec Decomposition', duration: '140ms', status: 'done' },
-                                                        { step: '2. Multi-Agent Vector & Stream Ingestion', duration: '980ms', status: 'done' },
-                                                        { step: '3. Verification & Cross-Source Deduplication', duration: '410ms', status: 'done' },
-                                                        { step: '4. Final Synthesis & Schema Alignment', duration: '520ms', status: 'done' },
-                                                    ].map((item, idx) => (
-                                                        <div
-                                                            key={idx}
-                                                            className="flex items-center justify-between p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 text-xs font-mono shadow-xs"
-                                                        >
-                                                            <div className="flex items-center gap-2">
-                                                                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                                                <span className="text-zinc-800 dark:text-zinc-200">{item.step}</span>
-                                                            </div>
-                                                            <span className="text-zinc-500 text-[11px]">{item.duration}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    /* Empty State */
-                                    <div className="h-full flex flex-col items-center justify-center text-center space-y-3 py-16">
-                                        <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mx-auto text-zinc-400 dark:text-zinc-500 shadow-inner">
-                                            <Search className="h-5 w-5" />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-200">
-                                                No {activeCategoryMeta.label} results yet
-                                            </h3>
-                                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                                Enter a query or select an example and hit Run to see results.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Floating "Get Code" Button */}
-                            <div className="absolute bottom-5 right-5 z-10">
-                                <Button
-                                    onClick={() => setIsCodeModalOpen((v) => !v)}
-                                    className="rounded px-4 py-2 text-xs font-mono font-semibold bg-primary text-white border border-zinc-700 dark:border-zinc-200 shadow-xl cursor-pointer flex items-center gap-1.5 transition-all hover:scale-105"
-                                >
-                                    <Code2 className="h-3.5 w-3.5" />
-                                    <span>{isCodeModalOpen ? 'Hide Code' : 'Get Code'}</span>
-                                </Button>
-                            </div>
-
-                            {/* Floating Code Panel — bottom-right, no overlay */}
-                            {isCodeModalOpen && 
-                                <CodeDialog
-                                    prompt={prompt}
-                                    activeCategoryMeta={activeCategoryMeta}
-                                    normalizedCategory={normalizedCategory}
-                                    mode={mode}
-                                    isStructuredOutput={isStructuredOutput}
-                                    schemaTemplate={schemaTemplate}
-                                    location={location}
-                                    language={language}
-                                    alertThreshold={alertThreshold}
-                                    webhookUrl={webhookUrl}
-                                    pollingInterval={pollingInterval}
-                                    namespace={namespace}
-                                    topK={topK}
-                                    similarityThreshold={similarityThreshold}
-                                    extractRelations={extractRelations}
-                                    setIsCodeModalOpen={setIsCodeModalOpen}
-                                />
-                            }
-                        </div>
+                        <PlaygroundRightPane
+                            leftWidth={leftWidth}
+                            state={playgroundState}
+                            setters={playgroundSetters}
+                            handlers={playgroundHandlers}
+                        />
                     </div>
                 )}
 
-                {/* ========================================================
-            HISTORY VIEW (When History Tab Is Active)
-            ======================================================== */}
                 {activeView === 'history' && (
-                    <div className="w-full h-[calc(100vh-48px)] overflow-y-auto p-4 sm:p-6 bg-[#FAF8F5] dark:bg-zinc-950">
-                        <Card className="rounded-2xl border border-zinc-200 dark:border-zinc-800/90 bg-white dark:bg-zinc-950 p-6 space-y-5 shadow-xl text-zinc-900 dark:text-zinc-100">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div>
-                                    <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Execution History</h2>
-                                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                        Recent task, monitor, and memory runs, latencies, token consumption, and outputs.
-                                    </p>
-                                </div>
-
-                                <div className="w-full sm:w-72 relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
-                                    <Input
-                                        placeholder="Search history..."
-                                        value={historySearch}
-                                        onChange={(e) => setHistorySearch(e.target.value)}
-                                        className="pl-9 h-8 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-900/90 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="divide-y divide-zinc-200 dark:divide-zinc-800/80 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                                {historyList
-                                    .filter((item) =>
-                                        item.query.toLowerCase().includes(historySearch.toLowerCase()) ||
-                                        item.id.toLowerCase().includes(historySearch.toLowerCase())
-                                    )
-                                    .map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className="p-4 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3"
-                                        >
-                                            <div className="space-y-1 max-w-xl">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono text-xs font-bold text-zinc-900 dark:text-zinc-200">{item.id}</span>
-                                                    <Badge variant="outline" className="text-[10px] font-mono border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 uppercase">
-                                                        {item.category || 'task'}
-                                                    </Badge>
-                                                    <Badge variant="outline" className="text-[10px] font-mono border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400">
-                                                        {item.mode}
-                                                    </Badge>
-                                                    <StatusBadge status={item.status} />
-                                                </div>
-                                                <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-1">{item.query}</p>
-                                            </div>
-
-                                            <div className="flex items-center gap-4 text-xs font-mono text-zinc-500">
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{item.duration}</span>
-                                                <span>{item.tokens?.toLocaleString()} tok</span>
-                                                <span>${item.cost?.toFixed(4)}</span>
-                                                <span>{item.createdAt}</span>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        const targetCat = item.category || 'task'
-                                                        navigate(`/dashboard/playground/${targetCat}`)
-                                                        setPrompt(item.query)
-                                                        setCurrentResult(item)
-                                                        setActiveView('playground')
-                                                    }}
-                                                    className="h-7 text-xs text-primary hover:bg-primary/10 rounded cursor-pointer"
-                                                >
-                                                    Load Result ↗
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                            </div>
-                        </Card>
-                    </div>
+                    <PlaygroundHistory
+                        historyList={historyList}
+                        historySearch={historySearch}
+                        setHistorySearch={setHistorySearch}
+                        navigate={navigate}
+                        setPrompt={setPrompt}
+                        setCurrentResult={setCurrentResult}
+                        setActiveView={setActiveView}
+                    />
                 )}
-
-
             </div>
         </Skeleton>
     )
+
 }

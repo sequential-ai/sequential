@@ -126,9 +126,9 @@ export default function ApiKeys() {
         const res = await api.getApiKeys()
         if (isMounted && res.data?.success && Array.isArray(res.data.data)) {
           const mapped = res.data.data.map((k) => {
-            const creatorName = k.createdByUser
-              ? (k.createdByUser.firstName ? `${k.createdByUser.firstName} ${k.createdByUser.lastName || ''}`.trim() : k.createdByUser.email)
-              : (userEmail || 'Team Member')
+            const creatorEmail = k.createdByUser
+              ? userEmail
+              : 'Team Member'
 
             return {
               id: k.id,
@@ -136,7 +136,7 @@ export default function ApiKeys() {
               description: k.description || '',
               maskedValue: k.keyPrefix ? `${k.keyPrefix}...` : 'sk_live_****',
               fullSecret: k.keyPrefix ? `${k.keyPrefix}••••••••••••••••` : 'sk_live_secret',
-              createdBy: creatorName,
+              createdBy: creatorEmail,
               createdAt: k.createdAt ? new Date(k.createdAt).toLocaleDateString('en-US') : 'Recent',
               revokedAt: k.revokedAt || null,
               role: 'Full Access',
@@ -582,32 +582,9 @@ export default function ApiKeys() {
                                   isEnabled ? 'text-foreground' : 'text-muted-foreground'
                                 }`}
                               >
-                                {isRevealed ? key.fullSecret : key.maskedValue}
+                                {key.maskedValue}
                               </span>
-                              <button
-                                type="button"
-                                title={isRevealed ? 'Hide Secret' : 'Reveal Secret'}
-                                onClick={() => toggleRevealKey(key.id)}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                              >
-                                {isRevealed ? (
-                                  <EyeOff className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-                              <button
-                                type="button"
-                                title="Copy Secret"
-                                onClick={() => handleCopy(key.fullSecret, key.id)}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                              >
-                                {isCopied ? (
-                                  <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                ) : (
-                                  <Copy className="h-3.5 w-3.5" />
-                                )}
-                              </button>
+                            
                             </div>
                           </td>
 
