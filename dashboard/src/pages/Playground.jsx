@@ -282,11 +282,9 @@ export default function Playground() {
                 if (res.data) {
                     const taskData = res.data;
                     const generatedResult = {
-                        id: taskData.run?.run_id || id,
                         category: normalizedCategory,
                         query: taskData.query || taskData.run?.input?.query || 'Loaded Task',
-                        run: taskData.run || taskData,
-                        output: taskData.output
+                        ...taskData
                     };
                     setCurrentResult(generatedResult);
                     setPrompt(generatedResult.query);
@@ -365,7 +363,7 @@ export default function Playground() {
                     includeTrace
                 })
 
-                const taskId = res.data?.run?.run_id
+                const taskId = res.data?.id || res.data?.run?.run_id
                 if (!taskId) {
                     throw new Error("No task ID returned")
                 }
@@ -378,17 +376,15 @@ export default function Playground() {
                         const statusRes = await api.getTaskStatus(taskId)
                         const taskData = statusRes.data
 
-                        const status = taskData?.run?.status
-                        if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELED') {
+                        const status = taskData?.status?.toLowerCase() || taskData?.run?.status?.toLowerCase()
+                        if (status === 'completed' || status === 'failed' || status === 'canceled') {
                             clearInterval(pollInterval)
 
                             // Map backend task to playground result structure
                             const generatedResult = {
-                                id: taskData.run.run_id,
                                 category: 'task',
                                 query: prompt,
-                                run: taskData.run,
-                                output: taskData.output
+                                ...taskData
                             }
 
                             setCurrentResult(generatedResult)

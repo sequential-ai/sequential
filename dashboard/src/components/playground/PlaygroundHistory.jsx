@@ -44,17 +44,18 @@ export default function PlaygroundHistory({
                             item.id.toLowerCase().includes(historySearch.toLowerCase())
                         )
                         .map((item) => {
-                            // Support both the new { run, output } envelope and old flat shape
+                            // Support both the new flattened shape and old envelope
                             const run = item.run
                             const status = run?.status ?? item.status
                             const mode = run?.mode ?? item.mode
-                            const durationMs = run?.execution?.executionTimeMs
+                            const durationMs = run?.execution?.executionTimeMs ?? item.usage?.duration_ms
                             const durationLabel = durationMs != null ? `${(durationMs / 1000).toFixed(2)}s` : (item.duration ?? '—')
-                            const tokens = run?.execution?.tokensUsed ?? item.tokens
-                            const cost = run?.execution?.costTotal ?? item.cost
-                            const createdAt = run?.created_at
-                                ? new Date(run.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                : (item.createdAt ?? '—')
+                            const tokens = run?.execution?.tokensUsed ?? item.usage?.tokens?.total ?? item.tokens
+                            const cost = run?.execution?.costTotal ?? item.usage?.cost ?? item.cost
+                            const createdAtRaw = run?.created_at ?? item.created_at ?? item.createdAt
+                            const createdAt = createdAtRaw
+                                ? new Date(createdAtRaw).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : '—'
 
                             return (
                                 <div

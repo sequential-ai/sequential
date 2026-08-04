@@ -1,5 +1,6 @@
 const prisma = require("../db/db-connection");
 const { enqueuePlanJob } = require("../orchestrator/queue");
+const { mapTaskDetailResponse, mapTaskSummaryResponse } = require("../modules/tasks/response/TaskResponseMapper");
 
 // ─────────────────────────────────────────────────────────────
 // POST /v1/tasks
@@ -138,37 +139,15 @@ const getTaskStatus = async (req, res) => {
 
     const isCompleted = task.status === "COMPLETED";
 
-    res.json({
-      run: {
-        run_id: task.id,
-        status: task.status,
-        mode: task.mode,
-        processor: task.mode,
-        metadata: {
-          responseFormat,
-          includeTrace,
-          workerCount: task.workerRuns?.length || 0,
-        },
-        execution: {
-          workerRuns: task.workerRuns || [],
-          costTotal: task.costTotal,
-          tokensUsed: task.tokensUsed,
-          executionTimeMs: task.executionTimeMs,
-        },
-        created_at: task.createdAt,
-        modified_at: task.updatedAt,
-        completed_at: task.completedAt || null,
-      },
-      output: isCompleted
-        ? {
-            type: responseFormat,
-            content: task.output?.answer || task.resultAnswer || null,
-            // `basis` key is only present when includeTrace=true to keep
-            // the default payload as lightweight as possible.
-            ...(basis !== undefined && { basis }),
-          }
-        : null,
-    });
+    // Use TaskResponseMapper to build the detail response
+    const publicResponse = mapTaskDetailResponse(task, { includeTrace });
+    
+    // Legacy support for basis injection if needed (usually handled manually or in trace mapping, but keeping it for backward compatibility)
+    if (basis !== undefined && publicResponse.output) {
+      publicResponse.output.basis = basis;
+    }
+
+    res.json(publicResponse);
   } catch (err) {
     console.error("Error fetching task:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -188,40 +167,7 @@ const getTasks = async (req, res) => {
       take: 50
     });
 
-    const formattedTasks = tasks.map(task => {
-      const taskInput = task.input || {};
-      const responseFormat = taskInput.responseFormat || "markdown";
-      const includeTrace = Boolean(taskInput.includeTrace);
-      const isCompleted = task.status === "COMPLETED";
-
-      return {
-        id: task.id,
-        category: 'task',
-        query: task.query,
-        run: {
-          run_id: task.id,
-          status: task.status,
-          mode: task.mode,
-          processor: task.mode,
-          metadata: {
-            responseFormat,
-            includeTrace,
-          },
-          execution: {
-            costTotal: task.costTotal,
-            tokensUsed: task.tokensUsed,
-            executionTimeMs: task.executionTimeMs,
-          },
-          created_at: task.createdAt,
-          modified_at: task.updatedAt,
-          completed_at: task.completedAt || null,
-        },
-        output: isCompleted ? {
-            type: responseFormat,
-            content: task.output?.answer || task.resultAnswer || null,
-        } : null
-      };
-    });
+    const formattedTasks = tasks.map(task => mapTaskSummaryResponse(task));
 
     res.json(formattedTasks);
   } catch (err) {

@@ -28,13 +28,15 @@ class SynthesisWorker extends BaseWorker {
     let llmResponseFormat = { type: "json_object" };
     
     if (input.responseFormat === "markdown") {
-      systemPrompt = `You are the final synthesis worker for Sequential AI.\n\nYour responsibility is to produce the final research result as a highly presentable, pure MARKDOWN string.\n\nIMPORTANT INSTRUCTIONS:\n1. Always start your response with a large level-1 heading (# Title) that perfectly summarizes the research topic.\n2. Do NOT generate JSON. Do NOT wrap your answer in a JSON object (e.g. no "summary" or "data" fields).\n3. Use Markdown tables if the answer requires tabular data.\n4. Keep the presentation simple, clean, and professional, similar to a README.md file.\n5. Use proper heading hierarchy (##, ###), lists, and bold text as appropriate.\n6. Ensure you cite your sources properly in the text.`;
+      systemPrompt = `You are the final synthesis worker for Sequential AI.\n\nYour responsibility is to produce the final research result as a highly presentable, pure MARKDOWN string.\n\nIMPORTANT INSTRUCTIONS:\n1. Always start your response with a large level-1 heading (# Title) that perfectly summarizes the research topic.\n2. Do NOT generate JSON. Do NOT wrap your answer in a JSON object.\n3. Use Markdown tables if the answer requires tabular data.\n4. Keep the presentation simple, clean, and professional, similar to a README.md file.\n5. Use proper heading hierarchy (##, ###), lists, and bold text as appropriate.\n6. Ensure you cite your sources properly in the text.`;
       if (input.taskSpec) {
         systemPrompt += `\n\nUse the following JSON schema strictly as a conceptual guide for what information to include in your Markdown output, but remember: DO NOT output JSON:\n${JSON.stringify(input.taskSpec)}`;
       }
       llmResponseFormat = undefined;
     } else if (input.taskSpec) {
       systemPrompt = `${SYNTHESIS_SYSTEM_PROMPT}\n\nReturn JSON matching this exact JSON Schema:\n${JSON.stringify(input.taskSpec)}`;
+    } else {
+      systemPrompt = `${SYNTHESIS_SYSTEM_PROMPT}\n\nReturn a structured JSON object representing the research result.`;
     }
 
     const result = await this.llm.run({
@@ -71,21 +73,27 @@ class SynthesisWorker extends BaseWorker {
     if (input.responseFormat === "markdown") {
       return {
         ...result,
-        answer: result.content.trim()
+        format: "markdown",
+        content: result.content.trim()
       };
     }
 
-    const output = parseJsonContent(result.content, "INVALID_SYNTHESIS_OUTPUT");
-
-    let actualData = output;
-    if (output && output.output && output.output.data) {
-      actualData = output.output.data;
-    } else if (output && output.data) {
-      actualData = output.data;
+    let parsedOutput;
+    try {
+      parsedOutput = parseJsonContent(result.content, "INVALID_SYNTHESIS_OUTPUT");
+    } catch (err) {
+      if (input.retryCount !== 1) {
+        console.warn("Synthesis JSON parse failed, retrying...", err.message);
+        return this.run({ ...input, validationErrors: [{ message: "Failed to parse JSON", details: err.message }], retryCount: 1 });
+      }
+      throw new WorkerError(`Synthesis output failed JSON parsing: ${err.message}`, {
+        code: "INVALID_SYNTHESIS_OUTPUT",
+        retryable: false
+      });
     }
 
     if (input.taskSpec) {
-      const validationResult = TaskValidator.validate(input.taskSpec, actualData);
+      const validationResult = TaskValidator.validate(input.taskSpec, parsedOutput);
       if (!validationResult.valid) {
         if (input.retryCount !== 1) {
           console.warn("Synthesis validation failed, retrying...", validationResult.errors);
@@ -93,27 +101,27 @@ class SynthesisWorker extends BaseWorker {
         } else {
           throw new WorkerError(`Synthesis output failed schema validation: ${JSON.stringify(validationResult.errors)}`, {
             code: "SYNTHESIS_SCHEMA_MISMATCH",
-            status: 502,
+            retryable: false
           });
         }
       }
-      return {
-        ...result,
-        data: actualData
-      };
     }
     
     // For queries without taskSpec, we still want to return the structured object if one was generated
-    if (typeof actualData === "object" && actualData !== null) {
-      return {
-        ...result,
-        data: actualData
-      };
+    if (typeof parsedOutput !== "object" || parsedOutput === null) {
+      if (input.retryCount !== 1) {
+        return this.run({ ...input, validationErrors: [{ message: "Output must be a JSON object or array" }], retryCount: 1 });
+      }
+      throw new WorkerError(`Synthesis output must be a JSON object or array`, {
+        code: "INVALID_SYNTHESIS_OUTPUT",
+        retryable: false
+      });
     }
 
     return {
       ...result,
-      answer: String(actualData).trim()
+      format: "json",
+      content: parsedOutput
     };
   }
 }

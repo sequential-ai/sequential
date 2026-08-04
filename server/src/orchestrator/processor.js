@@ -270,13 +270,11 @@ const worker = new Worker(
         // Fetch all worker runs to compute metrics
         const allRuns = await prisma.workerRun.findMany({ where: { taskId } });
 
-        // Update task output with the result
-        const taskOutput = {};
-        if (result.data) {
-          taskOutput.data = result.data;
-        } else {
-          taskOutput.answer = result.answer || result.content;
-        }
+        // The synthesis worker now returns { format: "...", content: ... }
+        const taskOutput = {
+          format: result.format,
+          content: result.content
+        };
 
         const taskExecution = {
           metrics: taskContext.getMetrics(),
@@ -287,7 +285,6 @@ const worker = new Worker(
           where: { id: taskId },
           data: {
             status: "COMPLETED",
-            resultAnswer: result.answer || result.content,
             output: taskOutput,
             execution: taskExecution,
             sources: processedSources,
