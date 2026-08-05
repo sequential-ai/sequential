@@ -1,6 +1,7 @@
 const { WorkerError } = require("./errors");
 const BaseWorker = require("./base.worker");
 const { OpenRouterWorker, parseJsonContent } = require("./openrouter.worker");
+const { PLANNER_SYSTEM_PROMPT } = require("./prompts");
 
 class SubQueryWorker extends BaseWorker {
   constructor(options = {}) {
@@ -33,11 +34,15 @@ class SubQueryWorker extends BaseWorker {
       messages: [
         {
           role: "system",
-          content: `You are a research planning agent. Decompose the user's research question into multiple independent, highly specific web-search sub-queries. You MUST generate exactly ${targetMax} sub-queries to ensure broad coverage. If the query is related to regulations, laws, or government policies, you MUST include 1 or 2 subqueries specifically targeting official government sources (e.g., appending 'site:.gov' or focusing on official regulatory bodies). Return JSON only with a 'subQueries' array. Each item must have 'query' and 'purpose' strings.`,
+          content: PLANNER_SYSTEM_PROMPT(targetMax)
         },
         {
           role: "user",
-          content: JSON.stringify({ query: query.trim(), maxSubQueries: targetMax }),
+          content: JSON.stringify(
+            {
+              query: query.trim(),
+              maxSubQueries: targetMax
+            }),
         },
       ],
     });

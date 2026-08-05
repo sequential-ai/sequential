@@ -124,9 +124,21 @@ const protectOrApiKey = async (req, res, next) => {
       req.user = decoded;
       
       // Dashboard sends x-organization-id for session requests
-      const orgId = req.headers['x-organization-id'];
+      let orgId = req.headers['x-organization-id'];
+      
+      if (!orgId && decoded.id) {
+        // Fallback for tools like Thunder Client: use the user's first organization
+        const user = await prisma.user.findUnique({
+          where: { clerkUserId: decoded.id },
+          include: { memberships: true }
+        });
+        if (user && user.memberships && user.memberships.length > 0) {
+          orgId = user.memberships[0].organizationId;
+        }
+      }
+
       if (!orgId) {
-        return res.status(400).json({ error: "Missing x-organization-id header for session request." });
+        return res.status(400).json({ error: "Missing x-organization-id header for session request, and user has no default organization." });
       }
       req.organizationId = orgId;
       return next();

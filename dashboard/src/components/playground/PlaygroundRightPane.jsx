@@ -238,17 +238,17 @@ export default function PlaygroundRightPane({
                         {outputFormat === 'markdown' && (
                             <div className="space-y-5">
                                 <div className="prose dark:prose-invert prose-sm max-w-none leading-relaxed font-sans text-zinc-800 dark:text-zinc-200 prose-pre:bg-zinc-100 prose-pre:text-zinc-900 dark:prose-pre:bg-zinc-900 dark:prose-pre:text-zinc-100 prose-p:leading-relaxed prose-a:text-primary">
-                                    <ReactMarkdown 
+                                    <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         components={{
-                                            table: ({node, ...props}) => <div className="overflow-x-auto my-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm"><table className="w-full text-sm text-left border-collapse" {...props} /></div>,
-                                            thead: ({node, ...props}) => <thead className="text-xs uppercase bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100" {...props} />,
-                                            th: ({node, ...props}) => <th className="px-5 py-4 font-semibold" {...props} />,
-                                            td: ({node, ...props}) => <td className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800/50 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-[#0a0a0a]" {...props} />,
-                                            tr: ({node, ...props}) => <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors" {...props} />,
-                                            h1: ({node, ...props}) => <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white mt-10 mb-6 tracking-tight leading-tight" {...props} />,
-                                            h2: ({node, ...props}) => <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mt-8 mb-5 tracking-tight" {...props} />,
-                                            h3: ({node, ...props}) => <h3 className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-white mt-6 mb-4 tracking-tight" {...props} />
+                                            table: ({ node, ...props }) => <div className="overflow-x-auto my-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm"><table className="w-full text-sm text-left border-collapse" {...props} /></div>,
+                                            thead: ({ node, ...props }) => <thead className="text-xs uppercase bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100" {...props} />,
+                                            th: ({ node, ...props }) => <th className="px-5 py-4 font-semibold" {...props} />,
+                                            td: ({ node, ...props }) => <td className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800/50 text-zinc-700 dark:text-zinc-300 bg-white dark:bg-[#0a0a0a]" {...props} />,
+                                            tr: ({ node, ...props }) => <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors" {...props} />,
+                                            h1: ({ node, ...props }) => <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white mt-10 mb-6 tracking-tight leading-tight" {...props} />,
+                                            h2: ({ node, ...props }) => <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mt-8 mb-5 tracking-tight" {...props} />,
+                                            h3: ({ node, ...props }) => <h3 className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-white mt-6 mb-4 tracking-tight" {...props} />
                                         }}
                                     >
                                         {output?.content || ''}
@@ -319,19 +319,19 @@ export default function PlaygroundRightPane({
 
                         {/* View: Raw JSON */}
                         {outputFormat === 'json' && (
-                                <div className="rounded-xl border bg-[#1e1e1e]  dark:border-zinc-800 font-mono text-xs overflow-auto shadow-inner h-[80vh] w-full p-4">
-                                <ReactJson 
+                            <div className="rounded-xl border bg-[#1e1e1e]  dark:border-zinc-800 font-mono text-xs overflow-auto shadow-inner h-[80vh] w-full p-4">
+                                <ReactJson
                                     src={currentResult}
                                     theme="monokai"
                                     iconStyle="triangle"
                                     collapsed={false}
                                     shouldCollapse={(field) => {
-                                       return field.name === 'execution'
+                                        return field.name === 'execution'
                                     }}
                                     enableClipboard={false}
                                     displayDataTypes={false}
-                                        displayObjectSize={true}
-                                    style={{backgroundColor:'transparent'}}
+                                    displayObjectSize={true}
+                                    style={{ backgroundColor: 'transparent' }}
                                 />
                             </div>
                         )}

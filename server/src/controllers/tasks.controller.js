@@ -21,7 +21,7 @@ const createTask = async (req, res) => {
       mode = "FAST",
       taskSpec,
       responseFormat = "markdown",
-      includeTrace = false,
+      includeTrace = true,
     } = req.body;
 
     const organizationId = req.organizationId;
@@ -75,7 +75,6 @@ const createTask = async (req, res) => {
 
     res.status(201).json({
       id: task.id,
-      run_id: task.id,
       status: task.status,
       mode: task.mode,
       output: null,
@@ -85,8 +84,10 @@ const createTask = async (req, res) => {
         cost: 0,
         duration_ms: null
       },
-      created_at: task.createdAt,
-      completed_at: null
+      timestamps: {
+        created_at: task.createdAt,
+        completed_at: null
+      }
     });
   } catch (err) {
     console.error("Error creating task:", err);
@@ -118,8 +119,16 @@ const getTaskStatus = async (req, res) => {
     const responseFormat = taskInput.responseFormat || "markdown";
     const includeTrace = Boolean(taskInput.includeTrace);
 
-    // Build the basis array only when the caller opted in AND the task is done.
-    const taskSources = Array.isArray(task.sources) ? task.sources : [];
+    const scrapeRuns = task.workerRuns?.filter(r => r.workerType === "SCRAPE" && r.status === "COMPLETED") || [];
+    const taskSources = (Array.isArray(task.sources) ? task.sources : []).map(src => {
+      const scrapeRun = scrapeRuns.find(r => r.input?.url === src.url || r.output?.url === src.url);
+      return {
+        id: src.id,
+        title: scrapeRun?.output?.title || src.title || null,
+        domain: src.domain,
+        url: src.url
+      };
+    });
     let basis;
     if (includeTrace && task.status === "COMPLETED") {
       basis = [
@@ -148,9 +157,22 @@ const getTaskStatus = async (req, res) => {
     const includeMetadata = includes.includes("metadata");
     const includeTraceData = includes.includes("trace");
 
+    const allEvidence = [];
+    task.workerRuns?.forEach(run => {
+      if (run.workerType === "EXTRACT" && run.status === "COMPLETED" && run.output && Array.isArray(run.output.evidence)) {
+        run.output.evidence.forEach(ev => {
+          const sourceInfo = taskSources.find(s => s.id === ev.sourceId);
+          allEvidence.push({
+            claim: ev.claim,
+            url: sourceInfo ? sourceInfo.url : ev.sourceId,
+            confidence: ev.confidence
+          });
+        });
+      }
+    });
+
     const responsePayload = {
       id: task.id,
-      run_id: task.id,
       status: task.status,
       mode: task.mode,
       output: isCompleted
@@ -161,9 +183,13 @@ const getTaskStatus = async (req, res) => {
           }
         : null,
       sources: taskSources,
+      evidence: allEvidence,
       usage,
-      created_at: task.createdAt,
-      completed_at: task.completedAt || null,
+      timestamps: {
+        created_at: task.createdAt,
+        started_at: task.startedAt || task.createdAt,
+        completed_at: task.completedAt || null,
+      },
     };
 
     if (includeMetadata) {
@@ -177,54 +203,84 @@ const getTaskStatus = async (req, res) => {
           completed_at: task.completedAt || null,
           duration_ms: task.executionTimeMs || null
         },
-        executionSummary: {
-          workers: {
-            total: task.workerRuns?.length || 0,
-            completed: task.workerRuns?.filter(r => r.status === "COMPLETED").length || 0,
-            failed: task.workerRuns?.filter(r => r.status === "FAILED").length || 0
-          },
-          searches: exec.metrics?.sources?.discovered || 0,
-          sources: {
-            discovered: exec.metrics?.sources?.discovered || 0,
-            fetched: exec.metrics?.sources?.fetched || 0,
-            failed: exec.metrics?.sources?.failed || 0
-          },
-          facts: {
-            extracted: exec.metrics?.facts || 0
-          }
-        }
+        executionSummary: (() => {
+          const searches = task.workerRuns?.filter(r => r.workerType === "SEARCH").length || 0;
+          const fetched = task.workerRuns?.filter(r => r.workerType === "SCRAPE" && r.status === "COMPLETED").length || 0;
+          const failed = task.workerRuns?.filter(r => r.workerType === "SCRAPE" && r.status === "FAILED").length || 0;
+          const discovered = taskSources.length || (fetched + failed);
+          
+          let extractedFacts = 0;
+          task.workerRuns?.filter(r => r.workerType === "EXTRACT" && r.status === "COMPLETED").forEach(r => {
+             if (r.output && Array.isArray(r.output.data)) {
+               extractedFacts += r.output.data.length;
+             } else if (r.output && Array.isArray(r.output.facts)) {
+               extractedFacts += r.output.facts.length;
+             } else if (r.output && Array.isArray(r.output.evidence)) {
+               extractedFacts += r.output.evidence.length;
+             }
+          });
+
+          return {
+            workers: {
+              total: task.workerRuns?.length || 0,
+              completed: task.workerRuns?.filter(r => r.status === "COMPLETED").length || 0,
+              failed: task.workerRuns?.filter(r => r.status === "FAILED").length || 0
+            },
+            searches: exec.metrics?.sources?.discovered || searches,
+            sources: {
+              discovered: exec.metrics?.sources?.discovered || discovered,
+              fetched: exec.metrics?.sources?.fetched || fetched,
+              failed: exec.metrics?.sources?.failed || failed
+            },
+            facts: {
+              extracted: exec.metrics?.facts || extractedFacts
+            }
+          };
+        })()
       };
     }
 
     if (includeTraceData) {
       responsePayload.trace = {
-        workers: (task.workerRuns || []).map((run, index) => {
-          const w = {
-            sequence: index + 1,
-            id: run.id,
-            type: run.workerType.toLowerCase(),
-            status: run.status.toLowerCase(),
-            started_at: run.startedAt,
-            completed_at: run.completedAt,
-            duration_ms: run.durationMs,
-          };
-          if (run.usage && run.usage.tokens && run.usage.tokens.total > 0) {
-            w.usage = { tokens: run.usage.tokens };
-          } else if (run.tokensUsed > 0) {
-            w.usage = { tokens: { input: 0, output: 0, total: run.tokensUsed } };
-          }
-          if (run.status === "FAILED") {
-            w.error = {
-              code: "WORKER_FAILED",
-              message: run.errorMessage || "Worker failed during execution"
+        workers: (task.workerRuns || [])
+          .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime())
+          .map((run, index) => {
+            const w = {
+              sequence: index + 1,
+              id: run.id,
+              input:run.input,
+              type: run.workerType.toLowerCase(),
+              status: run.status.toLowerCase(),
+              started_at: run.startedAt,
+              completed_at: run.completedAt,
+              duration_ms: run.durationMs,
             };
-          }
-          return w;
+            if (run.usage && run.usage.tokens) {
+              const t = run.usage.tokens;
+              w.usage = { 
+                tokens: {
+                  input: t.input ?? t.prompt ?? 0,
+                  output: t.output ?? t.completion ?? 0,
+                  cached: t.cached ?? 0,
+                  total: t.total ?? 0
+                } 
+              };
+            } else if (run.tokensUsed > 0) {
+              w.usage = { tokens: { input: 0, output: 0, cached: 0, total: run.tokensUsed } };
+            }
+            if (run.status === "FAILED") {
+              w.error = {
+                code: "WORKER_FAILED",
+                message: run.errorMessage || "Worker failed during execution"
+              };
+            }
+            return w;
         })
       };
     }
 
     res.json(responsePayload);
+   
   } catch (err) {
     console.error("Error fetching task:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -256,10 +312,10 @@ const getTasks = async (req, res) => {
         duration_ms: task.executionTimeMs || null
       };
 
+      const taskSources = Array.isArray(task.sources) ? task.sources : [];
+
       return {
         id: task.id,
-        run_id: task.id,
-        category: 'task',
         query: task.query,
         status: task.status,
         mode: task.mode,
@@ -267,9 +323,12 @@ const getTasks = async (req, res) => {
             type: responseFormat,
             content: task.output?.answer || task.resultAnswer || null,
         } : null,
+        sources: taskSources,
         usage,
-        created_at: task.createdAt,
-        completed_at: task.completedAt || null,
+        timestamps: {
+          created_at: task.createdAt,
+          completed_at: task.completedAt || null,
+        },
       };
     });
 

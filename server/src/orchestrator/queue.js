@@ -23,12 +23,12 @@ async function enqueuePlanJob(taskId, organizationId, query, mode = "STANDARD", 
 /**
  * Enqueues a SEARCH job for a specific subquery.
  */
-async function enqueueSearchJob(taskId, organizationId, subquery, mode, taskSpec = null) {
-  const hash = crypto.createHash("md5").update(subquery).digest("hex");
+async function enqueueSearchJob(taskId, organizationId, mainQuery, subQuery, purpose, mode, taskSpec = null) {
+  const hash = crypto.createHash("md5").update(subQuery).digest("hex");
   const jobId = `search-${taskId}-${hash}`;
   await researchQueue.add(
     "SEARCH",
-    { taskId, organizationId, query: subquery, mode, taskSpec },
+    { taskId, organizationId, query: mainQuery, subQuery, purpose, mode, taskSpec },
     { jobId }
   );
 }
@@ -36,12 +36,12 @@ async function enqueueSearchJob(taskId, organizationId, subquery, mode, taskSpec
 /**
  * Enqueues a SCRAPE job for a specific URL.
  */
-async function enqueueScrapeJob(taskId, organizationId, url, query, mode, taskSpec = null) {
+async function enqueueScrapeJob(taskId, organizationId, url, mainQuery, subQuery, purpose, mode, taskSpec = null) {
   const hash = crypto.createHash("md5").update(url).digest("hex");
   const jobId = `scrape-${taskId}-${hash}`;
   await researchQueue.add(
     "SCRAPE",
-    { taskId, organizationId, url, query, mode, taskSpec },
+    { taskId, organizationId, url, query: mainQuery, subQuery, purpose, mode, taskSpec },
     { jobId }
   );
 }
@@ -49,12 +49,12 @@ async function enqueueScrapeJob(taskId, organizationId, url, query, mode, taskSp
 /**
  * Enqueues an EXTRACT job for scraped content.
  */
-async function enqueueExtractJob(taskId, organizationId, url, content, query, mode, taskSpec = null) {
+async function enqueueExtractJob(taskId, organizationId, url, content, mainQuery, subQuery, purpose, mode, taskSpec = null) {
   const hash = crypto.createHash("md5").update(url).digest("hex");
   const jobId = `extract-${taskId}-${hash}`;
   await researchQueue.add(
     "EXTRACT",
-    { taskId, organizationId, url, content, query, mode, taskSpec },
+    { taskId, organizationId, url, content, query: mainQuery, subQuery, purpose, mode, taskSpec },
     { jobId }
   );
 }

@@ -281,15 +281,8 @@ export default function Playground() {
                 const res = await api.getTaskStatus(id);
                 if (res.data) {
                     const taskData = res.data;
-                    const generatedResult = {
-                        id: taskData.id || taskData.run_id || id,
-                        category: normalizedCategory,
-                        query: taskData.query || 'Loaded Task',
-                        run: taskData, // map flattened task directly as run 
-                        output: taskData.output
-                    };
-                    setCurrentResult(generatedResult);
-                    setPrompt(generatedResult.query);
+                    setCurrentResult(taskData);
+                    setPrompt(taskData.query || 'Loaded Task');
                 }
             } catch (err) {
                 console.error("Failed to load task by ID:", err);
@@ -382,20 +375,11 @@ export default function Playground() {
                         if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELED') {
                             clearInterval(pollInterval)
 
-                            // Map backend task to playground result structure
-                            const generatedResult = {
-                                id: taskData.id || taskData?.run?.run_id,
-                                category: 'task',
-                                query: prompt,
-                                run: taskData, // map flattened task directly as run 
-                                output: taskData.output
-                            }
-
-                            setCurrentResult(generatedResult)
-                            setHistoryList(prev => [generatedResult, ...prev])
+                            setCurrentResult(taskData)
+                            setHistoryList(prev => [taskData, ...prev])
                             setIsRunning(false)
                             setExecutionStep('')
-                        }
+                    }
                     } catch (pollErr) {
                         console.error("Polling error:", pollErr)
                         clearInterval(pollInterval)

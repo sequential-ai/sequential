@@ -76,17 +76,17 @@ async function failWorkerRun(runId, error) {
 const worker = new Worker(
   "researchQueue",
   async (job) => {
-    const { taskId, organizationId, query, mode = "STANDARD", taskSpec = null, responseFormat = "markdown" } = job.data;
+    const { taskId, organizationId, query: mainQuery, subQuery, purpose, mode = "STANDARD", taskSpec = null, responseFormat = "markdown" } = job.data;
     
     const taskContext = getOrCreateContext(taskId);
     
     // Update task status if it's PLAN
     if (job.name === "PLAN") {
-      console.log(`[Task ${taskId}] Starting PLAN job (Mode: ${mode}) for query: "${query}"...`);
+      console.log(`[Task ${taskId}] Starting PLAN job (Mode: ${mode}) for query: "${mainQuery}"...`);
       await prisma.task.update({ where: { id: taskId }, data: { status: "PLANNING", startedAt: new Date() } });
-      EventMapper.mapTaskStarted(taskId, mode, query);
+      EventMapper.mapTaskStarted(taskId, mode, mainQuery);
       
-      const run = await createWorkerRun(taskId, "PLANNER", "openrouter", "gpt-4o-mini", { query, taskSpec });
+      const run = await createWorkerRun(taskId, "PLANNER", "openrouter", "gpt-4o-mini", { query: mainQuery, taskSpec });
       try {
         let limit = 3; // STANDARD
         if (mode === "FAST") limit = 1;
@@ -94,7 +94,7 @@ const worker = new Worker(
         
         const planner = new SubQueryWorker({ maxSubQueries: limit });
         // planner extends BaseWorker which takes (taskId, input, taskContext)
-        const result = await planner.execute(taskId, { query, taskSpec }, taskContext);
+        const result = await planner.execute(taskId, { query: mainQuery, taskSpec }, taskContext);
         
         const tokens = result.usage?.total || 0;
         const cost = result.usage?.cost || 0;
@@ -103,11 +103,13 @@ const worker = new Worker(
         EventMapper.mapMetricsUpdated(taskId, 'planner', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'planner', { status: 'success' });
         
-        const subqueries = result.subQueries || result.queries || [query];
+        const subqueries = result.subQueries || result.queries || [mainQuery];
         const selectedQueries = subqueries.slice(0, limit);
         console.log(`[Task ${taskId}] PLAN complete. Generated ${selectedQueries.length} subqueries.`);
         for (const sq of selectedQueries) {
-          await enqueueSearchJob(taskId, organizationId, sq.query || sq, mode, taskSpec);
+          const sqText = sq.query || sq;
+          const sqPurpose = sq.purpose || "";
+          await enqueueSearchJob(taskId, organizationId, mainQuery, sqText, sqPurpose, mode, taskSpec);
         }
       } catch (err) {
         await failWorkerRun(run.id, err);
@@ -117,12 +119,13 @@ const worker = new Worker(
     } 
     
     else if (job.name === "SEARCH") {
-      console.log(`[Task ${taskId}] Starting SEARCH job for query: "${query}"...`);
+      const activeQuery = subQuery || mainQuery;
+      console.log(`[Task ${taskId}] Starting SEARCH job for query: "${activeQuery}"...`);
       await prisma.task.update({ where: { id: taskId }, data: { status: "RUNNING" } });
-      const run = await createWorkerRun(taskId, "SEARCH", "serper", "default", { query });
+      const run = await createWorkerRun(taskId, "SEARCH", "serper", "default", { query: activeQuery });
       try {
         const searcher = new SearchWorker();
-        const domainResults = await searcher.execute(taskId, { query }, taskContext);
+        const domainResults = await searcher.execute(taskId, { query: activeQuery }, taskContext);
         
         // Pass Domain Models to Event Mapper
         EventMapper.mapSearchResults(taskId, 'search', domainResults);
@@ -141,7 +144,7 @@ const worker = new Worker(
         console.log(`[Task ${taskId}] SEARCH complete. Found ${links.length} links to scrape.`);
         for (const link of links) {
           EventMapper.mapSourceLifecycle(taskId, 'search', link, 'discovered');
-          await enqueueScrapeJob(taskId, organizationId, link, query, mode, taskSpec);
+          await enqueueScrapeJob(taskId, organizationId, link, mainQuery, subQuery, purpose, mode, taskSpec);
         }
       } catch (err) {
         await failWorkerRun(run.id, err);
@@ -170,7 +173,7 @@ const worker = new Worker(
         
         if (result.content && result.content.trim().length > 100) {
           console.log(`[Task ${taskId}] SCRAPE complete. Extracted content, enqueuing EXTRACT phase...`);
-          await enqueueExtractJob(taskId, organizationId, url, result.content, query, mode, taskSpec);
+          await enqueueExtractJob(taskId, organizationId, url, result.content, mainQuery, subQuery, purpose, mode, taskSpec);
         }
       } catch (err) {
         taskContext.recordSource('failed');
@@ -191,7 +194,7 @@ const worker = new Worker(
         const extractor = new FactExtractorWorker();
         // Since FactExtractor isn't refactored yet, we just call run manually or execute if refactored
         // Let's assume we will refactor FactExtractorWorker to extend BaseWorker next.
-        const result = await extractor.execute(taskId, { url, content, query, taskSpec }, taskContext);
+        const result = await extractor.execute(taskId, { url, content, query: mainQuery, subQuery, purpose, taskSpec }, taskContext);
         
         let evidence = [];
         let extractedSources = [];
@@ -254,18 +257,18 @@ const worker = new Worker(
     else if (job.name === "SYNTHESIZE") {
       console.log(`[Task ${taskId}] Starting SYNTHESIZE job...`);
       await prisma.task.update({ where: { id: taskId }, data: { status: "SYNTHESIZING" } });
-      const run = await createWorkerRun(taskId, "SYNTHESIZE", "openrouter", "gpt-4o-mini", { query, taskSpec });
+      const run = await createWorkerRun(taskId, "SYNTHESIZE", "openrouter", "gpt-4o-mini", { query: mainQuery, taskSpec });
       
       try {
         // Semantic search to get memories
-        const topMemories = await semanticSearchService.searchMemories(query, taskId, organizationId, 20);
+        const topMemories = await semanticSearchService.searchMemories(mainQuery, taskId, organizationId, 20);
         
         const rawSources = [...new Set(topMemories.map(m => m.sourceUrl))];
         const processedSources = SourceManager.processSources(rawSources);
 
         const synthesizer = new SynthesisWorker();
         const result = await synthesizer.execute(taskId, {
-          query,
+          query: mainQuery,
           taskSpec,
           responseFormat,
           facts: topMemories.map(m => m.content),
