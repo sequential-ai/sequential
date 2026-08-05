@@ -7,9 +7,10 @@ class SourceManager {
   static processSources(urls) {
     if (!Array.isArray(urls)) return [];
     
+    const crypto = require("crypto");
     const uniqueUrls = [...new Set(urls.filter(u => typeof u === "string" && u.trim() !== ""))];
     
-    return uniqueUrls.map((url, index) => {
+    return uniqueUrls.map((url) => {
       let domain = "";
       try {
         const urlObj = new URL(url);
@@ -18,8 +19,9 @@ class SourceManager {
         domain = "unknown";
       }
       
+      const hash = crypto.createHash("md5").update(url).digest("hex").substring(0, 8);
       return {
-        id: `source_${index + 1}`,
+        id: `source_${hash}`,
         url,
         domain
       };

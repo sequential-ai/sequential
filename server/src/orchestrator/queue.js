@@ -60,6 +60,18 @@ async function enqueueExtractJob(taskId, organizationId, url, content, mainQuery
 }
 
 /**
+ * Enqueues an EVALUATE job.
+ */
+async function enqueueEvaluateJob(taskId, organizationId, query, taskSpec = null, responseFormat = "markdown", iteration = 1) {
+  const hash = crypto.createHash("md5").update(`eval-${iteration}`).digest("hex");
+  await researchQueue.add(
+    "EVALUATE",
+    { taskId, organizationId, query, taskSpec, responseFormat, iteration },
+    { jobId: `evaluate-${taskId}-${hash}` }
+  );
+}
+
+/**
  * Enqueues the final SYNTHESIZE job.
  */
 async function enqueueSynthesizeJob(taskId, organizationId, query, taskSpec = null, responseFormat = "markdown") {
@@ -77,5 +89,6 @@ module.exports = {
   enqueueSearchJob,
   enqueueScrapeJob,
   enqueueExtractJob,
+  enqueueEvaluateJob,
   enqueueSynthesizeJob,
 };

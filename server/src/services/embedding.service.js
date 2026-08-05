@@ -48,6 +48,56 @@ class EmbeddingService {
   }
 
   /**
+   * Generates embeddings and returns usage/cost info.
+   */
+  async generateEmbeddingsWithUsage(texts) {
+    if (!texts || texts.length === 0) return { embeddings: [], usage: null };
+    if (!this.apiKey) {
+      throw new Error("OPENROUTER_API_KEY is required for embeddings");
+    }
+
+    const response = await this.fetch(this.endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+        "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "http://localhost:5000",
+        "X-Title": process.env.OPENROUTER_SITE_NAME || "Sequential AI",
+      },
+      body: JSON.stringify({
+        model: this.model,
+        input: texts,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Embedding API failed: ${response.status} ${errText}`);
+    }
+
+    const data = await response.json();
+    if (!data.data || !Array.isArray(data.data)) {
+      throw new Error("Invalid response from Embedding API");
+    }
+
+    const embeddings = data.data.sort((a, b) => a.index - b.index).map((item) => item.embedding);
+    
+    let cost = 0;
+    if (data.usage && data.usage.total_tokens) {
+      cost = data.usage.total_tokens * 0.00000002;
+    }
+
+    const usage = data.usage ? {
+      input: data.usage.prompt_tokens || 0,
+      output: 0,
+      total: data.usage.total_tokens || 0,
+      cost: cost
+    } : null;
+
+    return { embeddings, usage };
+  }
+
+  /**
    * Generates a single embedding for a string.
    */
   async generateEmbedding(text) {

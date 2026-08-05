@@ -86,15 +86,38 @@ class SynthesisWorker extends BaseWorker {
 
     if (input.taskSpec) {
       const validationResult = TaskValidator.validate(input.taskSpec, actualData);
-      if (!validationResult.valid) {
-        if (input.retryCount !== 1) {
-          console.warn("Synthesis validation failed, retrying...", validationResult.errors);
-          return this.run({ ...input, validationErrors: validationResult.errors, retryCount: 1 });
+      let errors = validationResult.valid ? [] : validationResult.errors;
+      
+      const validUrls = (input.sources || []).map(s => s.split("] ")[1]);
+      const usedUrls = extractUrls(actualData);
+      const invalidUrls = [...usedUrls].filter(url => !validUrls.includes(url));
+      
+      if (invalidUrls.length > 0) {
+        errors.push({
+          message: `Invalid citations used: ${invalidUrls.join(", ")}. You must ONLY use the provided source URLs.`
+        });
+      }
+
+      if (errors.length > 0) {
+        if (!input.retryCount || input.retryCount < 2) {
+          console.warn("Synthesis validation failed, retrying...", errors);
+          return this.run({ 
+            ...input, 
+            validationErrors: errors, 
+            retryCount: (input.retryCount || 0) + 1 
+          }, taskContext);
         } else {
-          throw new WorkerError(`Synthesis output failed schema validation: ${JSON.stringify(validationResult.errors)}`, {
-            code: "SYNTHESIS_SCHEMA_MISMATCH",
-            status: 502,
-          });
+          if (invalidUrls.length > 0) {
+            console.warn("Citation repair failed. Failing safely by stripping invalid citations.");
+            stripInvalidCitations(actualData, validUrls);
+          }
+          const finalValidation = TaskValidator.validate(input.taskSpec, actualData);
+          if (!finalValidation.valid) {
+            throw new WorkerError(`Synthesis output failed schema validation: ${JSON.stringify(finalValidation.errors)}`, {
+              code: "SYNTHESIS_SCHEMA_MISMATCH",
+              status: 502,
+            });
+          }
         }
       }
       return {
@@ -105,6 +128,21 @@ class SynthesisWorker extends BaseWorker {
     
     // For queries without taskSpec, we still want to return the structured object if one was generated
     if (typeof actualData === "object" && actualData !== null) {
+      const validUrls = (input.sources || []).map(s => s.split("] ")[1]);
+      const usedUrls = extractUrls(actualData);
+      const invalidUrls = [...usedUrls].filter(url => !validUrls.includes(url));
+      
+      if (invalidUrls.length > 0) {
+        if (!input.retryCount || input.retryCount < 2) {
+           return this.run({ 
+            ...input, 
+            validationErrors: [{ message: `Invalid citations used: ${invalidUrls.join(", ")}. You must ONLY use the provided source URLs.` }], 
+            retryCount: (input.retryCount || 0) + 1 
+          }, taskContext);
+        } else {
+           stripInvalidCitations(actualData, validUrls);
+        }
+      }
       return {
         ...result,
         data: actualData
@@ -115,6 +153,33 @@ class SynthesisWorker extends BaseWorker {
       ...result,
       answer: String(actualData).trim()
     };
+  }
+}
+
+function extractUrls(obj, urls = new Set()) {
+  if (typeof obj === "string" && obj.startsWith("http")) urls.add(obj);
+  else if (Array.isArray(obj)) obj.forEach(item => extractUrls(item, urls));
+  else if (typeof obj === "object" && obj !== null) Object.values(obj).forEach(val => extractUrls(val, urls));
+  return urls;
+}
+
+function stripInvalidCitations(obj, validUrls) {
+  if (Array.isArray(obj)) {
+    for (let i = obj.length - 1; i >= 0; i--) {
+      if (typeof obj[i] === "string" && obj[i].startsWith("http")) {
+        if (!validUrls.includes(obj[i])) obj.splice(i, 1);
+      } else {
+        stripInvalidCitations(obj[i], validUrls);
+      }
+    }
+  } else if (typeof obj === "object" && obj !== null) {
+    for (const key of Object.keys(obj)) {
+      if (typeof obj[key] === "string" && obj[key].startsWith("http")) {
+        if (!validUrls.includes(obj[key])) obj[key] = null; // or delete obj[key]
+      } else {
+        stripInvalidCitations(obj[key], validUrls);
+      }
+    }
   }
 }
 

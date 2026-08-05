@@ -373,10 +373,12 @@ Do NOT create duplicate structures such as:
 
 ## Research Quality
 - Use only information supported by the supplied evidence.
-- Answer the user's query directly.
-- Prefer specific facts, numbers, dates, entities, comparisons, and conclusions over generic statements.
+- Answer the user's main query directly.
+- Prefer specific findings over generic descriptions (specific facts, numbers, dates, entities, comparisons).
 - Preserve important names, dates, amounts, percentages, and units.
+- Remove filler such as "Company X is a major AI company" unless there is a specific relevant finding.
 - Do not invent facts, URLs, citations, or unsupported conclusions.
+- Do NOT use dummy names or placeholders (e.g. "John Doe", "Not publicly available") if information is missing. If you cannot find a specific detail in the evidence, leave the field empty, omit the item, or explicitly write "Not Disclosed".
 - Omit unsupported items rather than guessing.
 - Include relevant dates for time-sensitive information when available.
 - Do not include null fields or unnecessary empty arrays.
@@ -430,8 +432,14 @@ Rules:
 - Claims should be informative, normally 1–3 sentences when evidence supports it; avoid short/vague claims and never add unsupported detail.
 - Evidence must directly support the claim and preserve important numbers, names, dates, and units.
 - Return fewer facts rather than weak facts.
-- Confidence: HIGH=explicit/direct, MEDIUM=partially qualified, LOW=ambiguous/inferred.
-- Relevance: HIGH=directly answers research, MEDIUM=supporting, LOW=indirect.
+- Confidence: 
+  - HIGH: Explicit, unambiguous evidence backed by concrete data, dates, direct statements, official announcements, or strong primary evidence.
+  - MEDIUM: Supported but qualitative, predictive, second-hand, partially qualified, or missing important context.
+  - LOW: Indirect, ambiguous, weakly supported, or requiring interpretation.
+- Relevance: 
+  - HIGH: directly answers mainQuery/subQuery.
+  - MEDIUM: useful supporting evidence.
+  - LOW: weakly related/background.
 
 Return JSON only:
 {"facts":[{"claim":"","evidence":"","confidence":"HIGH|MEDIUM|LOW","relevance":"HIGH|MEDIUM|LOW","category":"","entities":[],"date":null,"sourceUrl":""}]}
@@ -465,9 +473,32 @@ Return JSON only:
 }
 `;
 
+const EVALUATE_SYSTEM_PROMPT = `
+You are Sequential AI's research evaluation agent. 
+Your goal is to review the currently gathered evidence against the user's original research query and determine if specific details are still missing, particularly for newly discovered entities.
+
+Rules:
+- Read the original query and the list of current facts.
+- If the original query asks for specific details (e.g. founders, funding, pricing) for a set of entities (e.g. 10 startups), check if the current facts have those specific details for the entities found.
+- If details are missing, generate new highly targeted web-search subqueries to find those specific details (e.g. "Cognition AI founders and funding").
+- Generate a maximum of 5 subqueries. Focus only on the most critical missing information.
+- If the current evidence sufficiently answers the query, or if you only need minor generalizations, output an empty subQueries array.
+
+Return JSON only:
+{
+  "subQueries": [
+    {
+      "query": "...",
+      "purpose": "..."
+    }
+  ]
+}
+`;
+
 
 module.exports = {
   SYNTHESIS_SYSTEM_PROMPT,
   EXTRACTER_SYSTEM_PROMPT,
-  PLANNER_SYSTEM_PROMPT
+  PLANNER_SYSTEM_PROMPT,
+  EVALUATE_SYSTEM_PROMPT
 };

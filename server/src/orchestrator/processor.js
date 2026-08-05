@@ -1,10 +1,10 @@
 const { Worker } = require("bullmq");
-const { connection, enqueueSearchJob, enqueueScrapeJob, enqueueExtractJob, enqueueSynthesizeJob, researchQueue } = require("./queue");
+const { connection, enqueueSearchJob, enqueueScrapeJob, enqueueExtractJob, enqueueEvaluateJob, enqueueSynthesizeJob, researchQueue } = require("./queue");
 const prisma = require("../db/db-connection");
 const EventMapper = require("../sse/EventMapper");
 const EventPipeline = require("../sse/EventPipeline");
 const TaskExecutionContext = require("../modules/tasks/TaskExecutionContext");
-const { SubQueryWorker, SearchWorker, ScraperWorker, FactExtractorWorker, SynthesisWorker } = require("../workers");
+const { SubQueryWorker, SearchWorker, ScraperWorker, FactExtractorWorker, EvaluateWorker, SynthesisWorker } = require("../workers");
 const embeddingService = require("../services/embedding.service");
 const semanticSearchService = require("../services/semantic-search.service");
 const SourceManager = require("../modules/tasks/sourceManager");
@@ -135,16 +135,24 @@ const worker = new Worker(
         EventMapper.mapMetricsUpdated(taskId, 'search', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'search', { status: 'success' });
         
-        let limit = 4; // STANDARD
-        if (mode === "FAST") limit = 3;
-        if (mode === "DEEP") limit = 7;
+        let limit = 8; // STANDARD
+        if (mode === "FAST") limit = 5;
+        if (mode === "DEEP") limit = 12;
 
         // Scraper handles source extraction
         const links = domainResults.slice(0, limit).map(r => r.url);
         console.log(`[Task ${taskId}] SEARCH complete. Found ${links.length} links to scrape.`);
         for (const link of links) {
-          EventMapper.mapSourceLifecycle(taskId, 'search', link, 'discovered');
-          await enqueueScrapeJob(taskId, organizationId, link, mainQuery, subQuery, purpose, mode, taskSpec);
+          const normalized = link.trim().toLowerCase();
+          const added = await connection.sadd(`task:${taskId}:urls`, normalized);
+          
+          if (added) {
+            await connection.expire(`task:${taskId}:urls`, 86400);
+            EventMapper.mapSourceLifecycle(taskId, 'search', link, 'discovered');
+            await enqueueScrapeJob(taskId, organizationId, link, mainQuery, subQuery, purpose, mode, taskSpec);
+          } else {
+            console.log(`[Task ${taskId}] Skipping already processed URL: ${link}`);
+          }
         }
       } catch (err) {
         await failWorkerRun(run.id, err);
@@ -158,6 +166,24 @@ const worker = new Worker(
       console.log(`[Task ${taskId}] Starting SCRAPE job for URL: ${url}...`);
       EventMapper.mapSourceLifecycle(taskId, 'SCRAPE', url, 'fetching');
       
+      const TTL_HOURS = parseInt(process.env.WEB_CACHE_TTL_HOURS || "12", 10);
+      const cacheCutoff = new Date(Date.now() - TTL_HOURS * 60 * 60 * 1000);
+
+      const cachedResult = await prisma.$queryRaw`
+        SELECT id FROM "Memory"
+        WHERE "organizationId" = ${organizationId}
+          AND "sourceUrl" = ${url}
+          AND "createdAt" >= ${cacheCutoff}
+        LIMIT 1
+      `;
+
+      if (cachedResult && cachedResult.length > 0) {
+        console.log(`[Task ${taskId}] SCRAPE cache hit for URL: ${url}`);
+        EventMapper.mapSourceLifecycle(taskId, 'scraper', url, 'fetched');
+        await enqueueExtractJob(taskId, organizationId, url, null, mainQuery, subQuery, purpose, mode, taskSpec);
+        return;
+      }
+      
       const run = await createWorkerRun(taskId, "SCRAPE", "jina", "reader", { url });
       try {
         const scraper = new ScraperWorker();
@@ -165,15 +191,38 @@ const worker = new Worker(
         
         taskContext.recordSource('fetched');
         taskContext.recordWorkerUsage(`scrape_${run.id}`, null, 0.0005);
-        await completeWorkerRun(run.id, { title: result.title }, 0.0005, null); // don't store full content in outputData
+        await completeWorkerRun(run.id, { title: result.title }, 0.0005, null);
         
         EventMapper.mapSourceLifecycle(taskId, 'scraper', url, 'fetched');
         EventMapper.mapMetricsUpdated(taskId, 'scraper', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'scraper', { status: 'success' });
         
         if (result.content && result.content.trim().length > 100) {
-          console.log(`[Task ${taskId}] SCRAPE complete. Extracted content, enqueuing EXTRACT phase...`);
-          await enqueueExtractJob(taskId, organizationId, url, result.content, mainQuery, subQuery, purpose, mode, taskSpec);
+          console.log(`[Task ${taskId}] SCRAPE complete. Chunking and embedding content...`);
+          
+          // Simple naive chunking for ~1000 tokens (approx 4000 chars)
+          const chunks = [];
+          const chunkSize = 4000;
+          const overlap = 400;
+          let idx = 0;
+          while (idx < result.content.length) {
+            chunks.push(result.content.slice(idx, idx + chunkSize));
+            idx += chunkSize - overlap;
+          }
+
+          if (chunks.length > 0) {
+            const { embeddings, usage } = await embeddingService.generateEmbeddingsWithUsage(chunks);
+            if (usage) taskContext.recordWorkerUsage(`embed_${Date.now()}`, usage, usage.cost);
+
+            for (let i = 0; i < chunks.length; i++) {
+              const vectorString = `[${embeddings[i].join(",")}]`;
+              await prisma.$executeRaw`
+                INSERT INTO "Memory" ("id", "organizationId", "taskId", "sourceUrl", "content", "embedding", "createdAt")
+                VALUES (gen_random_uuid()::text, ${organizationId}, ${taskId}, ${url}, ${chunks[i]}, ${vectorString}::vector, NOW())
+              `;
+            }
+          }
+          await enqueueExtractJob(taskId, organizationId, url, null, mainQuery, subQuery, purpose, mode, taskSpec);
         }
       } catch (err) {
         taskContext.recordSource('failed');
@@ -187,14 +236,38 @@ const worker = new Worker(
     }
 
     else if (job.name === "EXTRACT") {
-      const { url, content } = job.data;
+      const { url } = job.data;
       console.log(`[Task ${taskId}] Starting EXTRACT job for URL: ${url}...`);
       const run = await createWorkerRun(taskId, "EXTRACT", "openrouter", "gpt-4o-mini", { url });
       try {
+        const searchQuery = `${subQuery || mainQuery} ${purpose || ""}`.trim();
+        const topK = parseInt(process.env.EXTRACTION_TOP_K_CHUNKS || "10", 10);
+        const maxTokens = parseInt(process.env.EXTRACTION_MAX_CONTEXT_TOKENS || "8000", 10);
+        
+        const { embeddings, usage } = await embeddingService.generateEmbeddingsWithUsage([searchQuery]);
+        if (usage) taskContext.recordWorkerUsage(`embed_${Date.now()}`, usage, usage.cost);
+
+        const vectorString = `[${embeddings[0].join(",")}]`;
+
+        const chunks = await prisma.$queryRaw`
+          SELECT "id", "content", "embedding" <=> ${vectorString}::vector as distance
+          FROM "Memory"
+          WHERE "organizationId" = ${organizationId}
+            AND "sourceUrl" = ${url}
+          ORDER BY distance ASC
+          LIMIT ${topK}
+        `;
+        
+        let contextContent = "";
+        const chunkIds = [];
+        for (const chunk of chunks) {
+          if ((contextContent.length + chunk.content.length) / 4 > maxTokens) break;
+          contextContent += chunk.content + "\\n\\n";
+          chunkIds.push(chunk.id);
+        }
+
         const extractor = new FactExtractorWorker();
-        // Since FactExtractor isn't refactored yet, we just call run manually or execute if refactored
-        // Let's assume we will refactor FactExtractorWorker to extend BaseWorker next.
-        const result = await extractor.execute(taskId, { url, content, query: mainQuery, subQuery, purpose, taskSpec }, taskContext);
+        const result = await extractor.execute(taskId, { url, content: contextContent, query: mainQuery, subQuery, purpose, taskSpec }, taskContext);
         
         let evidence = [];
         let extractedSources = [];
@@ -204,23 +277,45 @@ const worker = new Worker(
           const rawSources = [...new Set(result.facts.map(f => f.sourceUrl || url))];
           extractedSources = SourceManager.processSources(rawSources);
           
-          const enrichedFacts = result.facts.map(fact => {
+          const enrichedFacts = [];
+          for (const fact of result.facts) {
             const matchedSource = extractedSources.find(s => s.url === (fact.sourceUrl || url));
-            return {
+            const sourceId = matchedSource ? matchedSource.id : null;
+            
+            // Persist to TaskEvidence
+            await prisma.taskEvidence.create({
+              data: {
+                organizationId,
+                taskId,
+                subQueryId: job.id, // using job.id as proxy for subQueryId
+                sourceId: sourceId || "unknown",
+                sourceUrl: fact.sourceUrl || url,
+                sourceTitle: result.title || null,
+                chunkIds,
+                claim: fact.claim,
+                evidence: fact.evidence,
+                confidence: fact.confidence,
+                relevance: fact.relevance,
+                entities: fact.entities || [],
+                category: fact.category
+              }
+            });
+
+            enrichedFacts.push({
               factId: fact.id,
               claim: fact.claim,
               evidence: fact.evidence,
               confidence: fact.confidence,
-              sourceId: matchedSource ? matchedSource.id : null,
+              sourceId,
               worker: 'extract',
               timestamp: new Date().toISOString()
-            };
-          });
+            });
+          }
           
           evidence = EvidenceBuilder.buildEvidence(result.facts, extractedSources);
           
           EventMapper.mapFactsExtracted(taskId, 'extract', enrichedFacts);
-          EventPipeline.flushFacts(taskId, 'extract'); // Force flush any remaining batched facts
+          EventPipeline.flushFacts(taskId, 'extract');
         }
 
         const cost = result.usage?.cost || 0;
@@ -229,27 +324,45 @@ const worker = new Worker(
         EventMapper.mapMetricsUpdated(taskId, 'extract', taskContext);
         EventMapper.mapWorkerCompleted(taskId, 'extract', { status: 'success' });
 
-        // INLINE EMBEDDING
-        if (result.facts && result.facts.length > 0) {
-          console.log(`[Task ${taskId}] EXTRACT complete. Found ${result.facts.length} facts. Generating and storing embeddings...`);
-          const factStrings = result.facts.map(f => `Claim: ${f.claim}\nEvidence: ${f.evidence}\nConfidence: ${f.confidence}\nSource: ${f.sourceUrl || url}`);
-          const embeddings = await embeddingService.generateEmbeddings(factStrings);
-
-          // Save to Memory
-          for (let i = 0; i < result.facts.length; i++) {
-            const fact = result.facts[i];
-            const vectorString = `[${embeddings[i].join(",")}]`;
-            
-            // Raw SQL insert for pgvector
-            await prisma.$executeRaw`
-              INSERT INTO "Memory" ("id", "organizationId", "taskId", "sourceUrl", "content", "embedding", "createdAt")
-              VALUES (gen_random_uuid()::text, ${organizationId}, ${taskId}, ${fact.sourceUrl || url}, ${factStrings[i]}, ${vectorString}::vector, NOW())
-            `;
-          }
-        }
       } catch (err) {
         await failWorkerRun(run.id, err);
         EventMapper.mapWorkerFailed(taskId, 'extract', { error: err.message });
+        throw err;
+      }
+    }
+
+    else if (job.name === "EVALUATE") {
+      console.log(`[Task ${taskId}] Starting EVALUATE job (Iteration: ${job.data.iteration})...`);
+      const run = await createWorkerRun(taskId, "EVALUATE", "openrouter", "gpt-4o-mini", { query: mainQuery });
+      try {
+        const taskEvidences = await prisma.taskEvidence.findMany({ where: { taskId, organizationId } });
+        const EvidenceAggregator = require("../modules/tasks/evidenceAggregator");
+        const aggregatedFacts = EvidenceAggregator.aggregate(taskEvidences);
+
+        const evaluator = new EvaluateWorker();
+        const result = await evaluator.execute(taskId, {
+          query: mainQuery,
+          facts: aggregatedFacts.map(f => `Claim: ${f.claim}\nEvidence: ${f.evidenceText}`)
+        }, taskContext);
+
+        const cost = result.usage?.cost || 0;
+        taskContext.recordWorkerUsage(`evaluate_${run.id}`, result.usage, cost);
+        await completeWorkerRun(run.id, result, cost, result.usage);
+        
+        const subqueries = result.subQueries || [];
+        if (subqueries.length > 0) {
+          console.log(`[Task ${taskId}] EVALUATE found gaps. Enqueueing ${subqueries.length} new searches.`);
+          await prisma.task.update({ where: { id: taskId }, data: { iteration: job.data.iteration + 1 } });
+          
+          for (const sq of subqueries) {
+            await enqueueSearchJob(taskId, organizationId, mainQuery, sq.query, sq.purpose, mode, taskSpec);
+          }
+        } else {
+          console.log(`[Task ${taskId}] EVALUATE satisfied. Proceeding to synthesize.`);
+          await enqueueSynthesizeJob(taskId, organizationId, mainQuery, taskSpec, responseFormat);
+        }
+      } catch (err) {
+        await failWorkerRun(run.id, err);
         throw err;
       }
     }
@@ -260,10 +373,15 @@ const worker = new Worker(
       const run = await createWorkerRun(taskId, "SYNTHESIZE", "openrouter", "gpt-4o-mini", { query: mainQuery, taskSpec });
       
       try {
-        // Semantic search to get memories
-        const topMemories = await semanticSearchService.searchMemories(mainQuery, taskId, organizationId, 20);
+        // Fetch all TaskEvidence for this task
+        const taskEvidences = await prisma.taskEvidence.findMany({
+          where: { taskId, organizationId }
+        });
         
-        const rawSources = [...new Set(topMemories.map(m => m.sourceUrl))];
+        const EvidenceAggregator = require("../modules/tasks/evidenceAggregator");
+        const aggregatedFacts = EvidenceAggregator.aggregate(taskEvidences);
+        
+        const rawSources = [...new Set(aggregatedFacts.flatMap(f => f.sources))];
         const processedSources = SourceManager.processSources(rawSources);
 
         const synthesizer = new SynthesisWorker();
@@ -271,7 +389,7 @@ const worker = new Worker(
           query: mainQuery,
           taskSpec,
           responseFormat,
-          facts: topMemories.map(m => m.content),
+          facts: aggregatedFacts.map(f => `[${f.type.toUpperCase()}] Claim: ${f.claim}\nEvidence: ${f.evidenceText}\nSources: ${f.sources.join(", ")}`),
           sources: processedSources.map(s => `[${s.id}] ${s.url}`)
         }, taskContext);
 
@@ -342,7 +460,7 @@ const worker = new Worker(
 // Real robust DAGs use BullMQ Flows, but this is a workable heuristic.
 
 async function checkAndTriggerSynthesize(job) {
-  if (["PLAN", "SEARCH", "SCRAPE", "EXTRACT"].includes(job.name)) {
+  if (["PLAN", "SEARCH", "SCRAPE", "EXTRACT", "EVALUATE"].includes(job.name)) {
     // Wait a bit to ensure any new jobs are enqueued
     await new Promise(resolve => setTimeout(resolve, 2000));
     
@@ -362,9 +480,20 @@ async function checkAndTriggerSynthesize(job) {
         const isSynthesizeEnqueued = [...activeJobs, ...waitingJobs, ...delayedJobs].some(
           j => j.data?.taskId === taskId && j.name === "SYNTHESIZE"
         );
+        const isEvaluateEnqueued = [...activeJobs, ...waitingJobs, ...delayedJobs].some(
+          j => j.data?.taskId === taskId && j.name === "EVALUATE"
+        );
         
-        if (!isSynthesizeEnqueued) {
-          await enqueueSynthesizeJob(taskId, organizationId, task.query, taskSpec, responseFormat);
+        if (!isSynthesizeEnqueued && !isEvaluateEnqueued) {
+           let maxIterations = 2; // STANDARD
+           if (task.mode === "FAST") maxIterations = 1;
+           if (task.mode === "DEEP") maxIterations = 3;
+
+           if (task.iteration < maxIterations && job.name !== "EVALUATE") {
+             await enqueueEvaluateJob(taskId, organizationId, task.query, taskSpec, responseFormat, task.iteration);
+           } else {
+             await enqueueSynthesizeJob(taskId, organizationId, task.query, taskSpec, responseFormat);
+           }
         }
       }
     }

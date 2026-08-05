@@ -52,6 +52,7 @@ enum WorkerType {
   SEARCH
   SCRAPE
   EXTRACT
+  EVALUATE
   SYNTHESIZE
 }
 
@@ -190,6 +191,7 @@ model Organization {
   projects       Project[]
   tasks          Task[]
   memories       Memory[]
+  taskEvidences  TaskEvidence[]
   collections    Collection[]
   savedSearches  SavedSearch[]
   notifications  Notification[]
@@ -492,6 +494,7 @@ model Task {
   query           String
   status          TaskStatus @default(PENDING)
   mode            TaskMode   @default(STANDARD)
+  iteration       Int        @default(1)
   resultAnswer    String?
   input           Json?
   execution       Json?
@@ -519,6 +522,7 @@ model Task {
   workerRuns        WorkerRun[]
   events            TaskEvent[]
   memories          Memory[]
+  taskEvidences     TaskEvidence[]
   creditLedger      CreditLedgerEntry[]
   requestLogs       ApiRequestLog[]
   collectionTasks   CollectionTask[]
@@ -599,6 +603,33 @@ model Memory {
   @@index([projectId])
   // Also run, via raw SQL migration (Prisma can't express pgvector index types):
   // CREATE INDEX ON "Memory" USING hnsw (embedding vector_cosine_ops);
+}
+
+model TaskEvidence {
+  id             String   @id @default(cuid())
+  organizationId String
+  taskId         String
+  subQueryId     String?
+  sourceId       String
+  sourceUrl      String
+  sourceTitle    String?
+  chunkIds       String[]
+  claim          String
+  evidence       String
+  confidence     String
+  relevance      String
+  entities       Json?
+  category       String?
+  entity         String?
+
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([taskId, sourceId])
+  @@index([organizationId])
 }
 
 model Collection {
