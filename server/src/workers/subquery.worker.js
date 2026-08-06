@@ -2,6 +2,7 @@ const { WorkerError } = require("./errors");
 const BaseWorker = require("./base.worker");
 const { OpenRouterWorker, parseJsonContent } = require("./openrouter.worker");
 const { PLANNER_SYSTEM_PROMPT } = require("./prompts");
+const modelSelectionService = require("../services/model-selection.service");
 
 class SubQueryWorker extends BaseWorker {
   constructor(options = {}) {
@@ -9,6 +10,7 @@ class SubQueryWorker extends BaseWorker {
     this.llm = options.llm || new OpenRouterWorker(options);
     this.model = options.model;
     this.maxSubQueries = options.maxSubQueries || 8;
+    this.mode = options.mode || 'STANDARD';
   }
 
   getEventPrefix() {
@@ -26,22 +28,29 @@ class SubQueryWorker extends BaseWorker {
 
     const targetMax = input.maxSubQueries || this.maxSubQueries;
 
+    // Use model selection service for cost-effective model choice
+    const selectedModel = input.model || this.model || 
+      modelSelectionService.getWorkerModel('planner', this.mode);
+
+    console.log(`[SubQueryWorker] Using model: ${selectedModel} for planning`);
+
     const result = await this.llm.run({
-      model: input.model || this.model,
+      model: selectedModel,
       temperature: input.temperature ?? 0.2,
       maxTokens: input.maxTokens,
       responseFormat: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content: PLANNER_SYSTEM_PROMPT(targetMax)
+          content: PLANNER_SYSTEM_PROMPT(targetMax, this.mode)
         },
         {
           role: "user",
           content: JSON.stringify(
             {
               query: query.trim(),
-              maxSubQueries: targetMax
+              maxSubQueries: targetMax,
+              mode: this.mode
             }),
         },
       ],

@@ -1,4 +1,5 @@
 const { WorkerError } = require("./errors");
+const cacheService = require("../services/cache.service");
 
 const DEFAULT_OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -13,6 +14,8 @@ class OpenRouterWorker {
     this.siteUrl = options.siteUrl || process.env.OPENROUTER_SITE_URL;
     this.siteName = options.siteName || process.env.OPENROUTER_SITE_NAME;
     this.fetch = options.fetch || globalThis.fetch;
+    this.cacheEnabled = options.cacheEnabled !== false; // Enable cache by default
+    this.cacheExcludePatterns = options.cacheExcludePatterns || [/extract/i, /synthesis/i]; // Don't cache extraction/synthesis by default
 
     if (typeof this.fetch !== "function") {
       throw new WorkerError("A fetch implementation is required", {
@@ -33,6 +36,27 @@ class OpenRouterWorker {
         code: "OPENROUTER_API_KEY_MISSING",
         status: 503,
       });
+    }
+
+    // Check cache for non-streaming requests
+    if (this.cacheEnabled && !request.stream) {
+      const shouldCache = !this.cacheExcludePatterns.some(pattern => 
+        pattern.test(request.model) || pattern.test(JSON.stringify(request.messages))
+      );
+      
+      if (shouldCache) {
+        const systemPrompt = request.messages.find(m => m.role === 'system')?.content || '';
+        const userMessage = request.messages.find(m => m.role === 'user')?.content || '';
+        
+        const cached = await cacheService.getPromptCache(systemPrompt, userMessage, request.model);
+        if (cached) {
+          console.log(`[OpenRouter] Cache hit for model: ${request.model}`);
+          return {
+            ...cached,
+            usage: { ...cached.usage, cached: true }
+          };
+        }
+      }
     }
 
     const headers = {
@@ -106,13 +130,16 @@ class OpenRouterWorker {
         }
       }
 
-      return {
+      const result = {
         provider: "openrouter",
         model: request.model,
         content: fullContent,
         usage: normalizeUsage(finalUsage),
         finishReason: null,
       };
+
+      // Don't cache streaming results (they're dynamic)
+      return result;
     }
 
     // Non-streaming handling below
@@ -135,7 +162,7 @@ class OpenRouterWorker {
       });
     }
 
-    return {
+    const result = {
       provider: "openrouter",
       model: payload.model || request.model,
       content,
@@ -143,6 +170,21 @@ class OpenRouterWorker {
       finishReason: choice.finish_reason || null,
       raw: payload,
     };
+
+    // Cache non-streaming results if enabled
+    if (this.cacheEnabled) {
+      const shouldCache = !this.cacheExcludePatterns.some(pattern => 
+        pattern.test(request.model) || pattern.test(JSON.stringify(request.messages))
+      );
+      
+      if (shouldCache) {
+        const systemPrompt = request.messages.find(m => m.role === 'system')?.content || '';
+        const userMessage = request.messages.find(m => m.role === 'user')?.content || '';
+        await cacheService.setPromptCache(systemPrompt, userMessage, request.model, result);
+      }
+    }
+
+    return result;
   }
 }
 

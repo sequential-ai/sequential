@@ -1,4 +1,4 @@
-const { SynthesisWorker } = require("./index");
+const { SynthesisWorker } = require("../index");
 
 const query = process.argv.slice(2).join(" ").trim();
 if (!query) {

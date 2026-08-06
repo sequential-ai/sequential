@@ -1,5 +1,6 @@
 const { WorkerError } = require("./errors");
 const BaseWorker = require("./base.worker");
+const { UrlNormalizer, SourceClassifier, ContentTypeDetector, FaviconGenerator } = require("./search.utils");
 
 const DEFAULT_SEARCH_ENDPOINT = "https://google.serper.dev/search";
 
@@ -22,8 +23,12 @@ class SearchWorker extends BaseWorker {
     return "search";
   }
 
-  async run(input, context) {
+  async run(input, context = {}) {
     const request = normalizeSearchInput(input);
+    const originalQuery = typeof input === "string" ? input : input.query;
+    const subQueryId = input.subQueryId || context.subQueryId;
+    const purpose = input.purpose || context.purpose;
+    const provider = "serper";
 
     if (!this.apiKey) {
       throw new WorkerError("SERPER_API_KEY is not configured", {
@@ -60,51 +65,44 @@ class SearchWorker extends BaseWorker {
       });
     }
 
-    const domainResults = [];
+    const searchResults = [];
     const organic = Array.isArray(payload.organic) ? payload.organic : [];
     
+    let position = 1;
     for (const r of organic) {
+      if (!r.link) continue;
+
+      const { canonicalUrl, domain } = UrlNormalizer.normalize(r.link);
+      if (!canonicalUrl) continue;
+
+      const sourceType = SourceClassifier.classify(domain, canonicalUrl);
+      const contentType = ContentTypeDetector.detect(domain, canonicalUrl);
+      const faviconUrl = FaviconGenerator.getFavicon(domain, r.imageUrl || r.favicon);
+
       const searchResult = {
         id: `search_result_${Math.random().toString(36).substr(2, 9)}`,
+        provider,
+        position: position++,
+        query: originalQuery,
+        subQueryId,
+        purpose,
         title: r.title,
         url: r.link,
-        domain: new URL(r.link).hostname,
-        snippet: r.snippet
+        canonicalUrl,
+        domain,
+        favicon: faviconUrl,
+        snippet: r.snippet,
+        sourceType,
+        contentType,
+        publishedAt: r.date || undefined,
+        sitelinks: r.sitelinks || undefined
       };
-      domainResults.push(searchResult);
+      
+      searchResults.push(searchResult);
     }
 
-    return rankAndFilterResults(domainResults);
+    return searchResults;
   }
-}
-
-function rankAndFilterResults(results) {
-  return results.sort((a, b) => {
-    const scoreA = getSourceScore(a);
-    const scoreB = getSourceScore(b);
-    return scoreB - scoreA;
-  });
-}
-
-function getSourceScore(result) {
-  let score = 0;
-  const domain = result.domain.toLowerCase();
-  const url = result.url.toLowerCase();
-
-  // Highly prioritized
-  if (domain.endsWith(".gov") || domain.endsWith(".edu")) score += 10;
-  if (domain === "github.com" || domain.endsWith(".github.io")) score += 10;
-  if (domain === "arxiv.org" || domain === "en.wikipedia.org") score += 10;
-  
-  // Official docs
-  if (domain.startsWith("docs.") || domain.startsWith("support.") || domain.startsWith("developer.")) score += 5;
-  if (url.endsWith(".pdf")) score += 5;
-
-  // Deprioritized (Not blocked, just pushed down)
-  if (domain.includes("youtube.com") || domain.includes("vimeo.com") || domain.includes("dailymotion.com")) score -= 5;
-  if (domain.includes("pinterest.") || domain.includes("quora.com") || domain.includes("reddit.com") || domain.includes("yahoo.com")) score -= 5;
-
-  return score;
 }
 
 function normalizeSearchInput(input) {

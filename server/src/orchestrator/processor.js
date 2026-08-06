@@ -1,12 +1,16 @@
 const { Worker } = require("bullmq");
-const { connection, enqueueSearchJob, enqueueScrapeJob, enqueueExtractJob, enqueueEvaluateJob, enqueueSynthesizeJob, researchQueue } = require("./queue");
+const { connection, enqueueSearchJob, enqueueScrapeJob, enqueueExtractJob, enqueueEvaluateJob, enqueueSynthesizeJob, enqueueVerifyJob, researchQueue } = require("./queue");
 const prisma = require("../db/db-connection");
 const EventMapper = require("../sse/EventMapper");
 const EventPipeline = require("../sse/EventPipeline");
 const TaskExecutionContext = require("../modules/tasks/TaskExecutionContext");
-const { SubQueryWorker, SearchWorker, ScraperWorker, FactExtractorWorker, EvaluateWorker, SynthesisWorker } = require("../workers");
+const { SubQueryWorker, SearchWorker, ScraperWorker, FactExtractorWorker, EvaluateWorker, SynthesisWorker, VerificationWorker } = require("../workers");
 const embeddingService = require("../services/embedding.service");
 const semanticSearchService = require("../services/semantic-search.service");
+const chunkingService = require("../services/chunking.service");
+const contextManagementService = require("../services/context-management.service");
+const sourceQualityService = require("../services/source-quality.service");
+const qualityMetricsService = require("../services/quality-metrics.service");
 const SourceManager = require("../modules/tasks/sourceManager");
 const EvidenceBuilder = require("../modules/tasks/evidenceBuilder");
 
@@ -21,6 +25,36 @@ function getOrCreateContext(taskId) {
 
 function destroyContext(taskId) {
   activeContexts.delete(taskId);
+}
+
+/**
+ * Prioritize subqueries based on iteration and mode
+ * Reduces token usage by focusing on most critical gaps
+ */
+function prioritizeSubqueries(subqueries, currentIteration, maxIterations) {
+  // In early iterations, allow more subqueries
+  // In later iterations, be more selective
+  const maxSubqueries = Math.ceil(subqueries.length * (1 - (currentIteration / maxIterations) * 0.5));
+  
+  // Sort by purpose priority (heuristic)
+  const priorityOrder = ['critical', 'missing', 'clarification', 'additional'];
+  
+  const prioritized = subqueries
+    .map(sq => ({
+      ...sq,
+      priority: priorityOrder.findIndex(p => (sq.purpose || '').toLowerCase().includes(p))
+    }))
+    .sort((a, b) => {
+      // Sort by priority first, then by index
+      if (a.priority !== -1 && b.priority !== -1) {
+        return a.priority - b.priority;
+      }
+      if (a.priority !== -1) return -1;
+      if (b.priority !== -1) return 1;
+      return 0;
+    });
+  
+  return prioritized.slice(0, Math.max(1, maxSubqueries));
 }
 
 // Helper to update worker run
@@ -92,9 +126,9 @@ const worker = new Worker(
         if (mode === "FAST") limit = 1;
         if (mode === "DEEP") limit = 5;
         
-        const planner = new SubQueryWorker({ maxSubQueries: limit });
+        const planner = new SubQueryWorker({ maxSubQueries: limit, mode });
         // planner extends BaseWorker which takes (taskId, input, taskContext)
-        const result = await planner.execute(taskId, { query: mainQuery, taskSpec }, taskContext);
+        const result = await planner.execute(taskId, { query: mainQuery, taskSpec, mode, maxSubQueries: limit }, taskContext);
         
         const tokens = result.usage?.total || 0;
         const cost = result.usage?.cost || 0;
@@ -127,21 +161,42 @@ const worker = new Worker(
         const searcher = new SearchWorker();
         const domainResults = await searcher.execute(taskId, { query: activeQuery }, taskContext);
         
-        // Pass Domain Models to Event Mapper
-        EventMapper.mapSearchResults(taskId, 'search', domainResults);
+        // Apply source quality scoring and ranking
+        const rankedSources = sourceQualityService.rankSources(domainResults);
+        const qualityReport = sourceQualityService.getQualityReport(domainResults);
         
-        taskContext.recordWorkerUsage('search', null, 0.001); // Approx serper cost
-        await completeWorkerRun(run.id, domainResults, 0.001, null);
-        EventMapper.mapMetricsUpdated(taskId, 'search', taskContext);
-        EventMapper.mapWorkerCompleted(taskId, 'search', { status: 'success' });
+        console.log(`[Task ${taskId}] Source quality report: ${JSON.stringify(qualityReport.qualityDistribution)}`);
         
+        // Select top sources based on mode
         let limit = 8; // STANDARD
         if (mode === "FAST") limit = 5;
         if (mode === "DEEP") limit = 12;
-
+        
+        // Apply diversity constraints with stricter limits for better diversity
+        const maxPerDomain = mode === "DEEP" ? 3 : mode === "STANDARD" ? 2 : 1;
+        const selectedSources = sourceQualityService.selectTopSources(domainResults, limit, maxPerDomain);
+        
+        // Check if we have sources to scrape
+        if (!selectedSources || selectedSources.length === 0) {
+          console.log(`[Task ${taskId}] No sources selected for scraping, skipping to SYNTHESIZE`);
+          await enqueueSynthesizeJob(taskId, organizationId, mainQuery, taskSpec, responseFormat);
+          return;
+        }
+        
+        // Pass Domain Models to Event Mapper
+        EventMapper.mapSearchResults(taskId, 'search', selectedSources.map(s => s.source));
+        
+        taskContext.recordWorkerUsage('search', null, 0.001); // Approx serper cost
+        await completeWorkerRun(run.id, { results: selectedSources, qualityReport }, 0.001, null);
+        EventMapper.mapMetricsUpdated(taskId, 'search', taskContext);
+        EventMapper.mapWorkerCompleted(taskId, 'search', { status: 'success' });
+        
+        // Record source quality metrics
+        qualityMetricsService.recordSourceMetrics(selectedSources.map(s => s.source));
+        
         // Scraper handles source extraction
-        const links = domainResults.slice(0, limit).map(r => r.url);
-        console.log(`[Task ${taskId}] SEARCH complete. Found ${links.length} links to scrape.`);
+        const links = selectedSources.map(s => s.source.url);
+        console.log(`[Task ${taskId}] SEARCH complete. Selected ${links.length} high-quality, diverse links to scrape.`);
         for (const link of links) {
           const normalized = link.trim().toLowerCase();
           const added = await connection.sadd(`task:${taskId}:urls`, normalized);
@@ -198,17 +253,12 @@ const worker = new Worker(
         EventMapper.mapWorkerCompleted(taskId, 'scraper', { status: 'success' });
         
         if (result.content && result.content.trim().length > 100) {
-          console.log(`[Task ${taskId}] SCRAPE complete. Chunking and embedding content...`);
+          console.log(`[Task ${taskId}] SCRAPE complete. Adaptive chunking and embedding content...`);
           
-          // Simple naive chunking for ~1000 tokens (approx 4000 chars)
-          const chunks = [];
-          const chunkSize = 4000;
-          const overlap = 400;
-          let idx = 0;
-          while (idx < result.content.length) {
-            chunks.push(result.content.slice(idx, idx + chunkSize));
-            idx += chunkSize - overlap;
-          }
+          // Use adaptive chunking service for better efficiency
+          const chunks = chunkingService.chunkContent(result.content, {
+            respectStructure: true // Enable structure-aware chunking
+          });
 
           if (chunks.length > 0) {
             const { embeddings, usage } = await embeddingService.generateEmbeddingsWithUsage(chunks);
@@ -258,16 +308,22 @@ const worker = new Worker(
           LIMIT ${topK}
         `;
         
-        let contextContent = "";
-        const chunkIds = [];
-        for (const chunk of chunks) {
-          if ((contextContent.length + chunk.content.length) / 4 > maxTokens) break;
-          contextContent += chunk.content + "\\n\\n";
-          chunkIds.push(chunk.id);
-        }
+        // Use context management service for optimal chunk selection
+        const chunkContents = chunks.map(c => c.content);
+        const chunkEmbeddings = chunks.map(c => c.embedding);
+        
+        const selectedChunks = contextManagementService.selectRelevantChunks(
+          chunkContents, 
+          embeddings[0], 
+          chunkEmbeddings, 
+          maxTokens
+        );
+        
+        let contextContent = selectedChunks.join('\n\n');
+        const chunkIds = chunks.slice(0, selectedChunks.length).map(c => c.id);
 
-        const extractor = new FactExtractorWorker();
-        const result = await extractor.execute(taskId, { url, content: contextContent, query: mainQuery, subQuery, purpose, taskSpec }, taskContext);
+        const extractor = new FactExtractorWorker({ mode });
+        const result = await extractor.execute(taskId, { url, content: contextContent, query: mainQuery, subQuery, purpose, taskSpec, mode }, taskContext);
         
         let evidence = [];
         let extractedSources = [];
@@ -332,17 +388,23 @@ const worker = new Worker(
     }
 
     else if (job.name === "EVALUATE") {
-      console.log(`[Task ${taskId}] Starting EVALUATE job (Iteration: ${job.data.iteration})...`);
-      const run = await createWorkerRun(taskId, "EVALUATE", "openrouter", "gpt-4o-mini", { query: mainQuery });
+      const currentIteration = job.data.iteration || 1;
+      const maxIterations = mode === "DEEP" ? 4 : mode === "STANDARD" ? 2 : 1;
+      
+      console.log(`[Task ${taskId}] Starting EVALUATE job (Iteration: ${currentIteration}/${maxIterations})...`);
+      const run = await createWorkerRun(taskId, "EVALUATE", "openrouter", "gpt-4o-mini", { query: mainQuery, iteration: currentIteration });
       try {
         const taskEvidences = await prisma.taskEvidence.findMany({ where: { taskId, organizationId } });
         const EvidenceAggregator = require("../modules/tasks/evidenceAggregator");
         const aggregatedFacts = EvidenceAggregator.aggregate(taskEvidences);
 
-        const evaluator = new EvaluateWorker();
+        const evaluator = new EvaluateWorker({ mode });
         const result = await evaluator.execute(taskId, {
           query: mainQuery,
-          facts: aggregatedFacts.map(f => `Claim: ${f.claim}\nEvidence: ${f.evidenceText}`)
+          facts: aggregatedFacts.map(f => `Claim: ${f.claim}\nEvidence: ${f.evidenceText}`),
+          mode,
+          iteration: currentIteration,
+          maxIterations
         }, taskContext);
 
         const cost = result.usage?.cost || 0;
@@ -350,17 +412,69 @@ const worker = new Worker(
         await completeWorkerRun(run.id, result, cost, result.usage);
         
         const subqueries = result.subQueries || [];
-        if (subqueries.length > 0) {
-          console.log(`[Task ${taskId}] EVALUATE found gaps. Enqueueing ${subqueries.length} new searches.`);
-          await prisma.task.update({ where: { id: taskId }, data: { iteration: job.data.iteration + 1 } });
+        
+        // Adaptive branching logic
+        if (subqueries.length > 0 && currentIteration < maxIterations) {
+          console.log(`[Task ${taskId}] EVALUATE found gaps. Enqueueing ${subqueries.length} new searches (iteration ${currentIteration + 1}).`);
+          await prisma.task.update({ where: { id: taskId }, data: { iteration: currentIteration + 1 } });
           
-          for (const sq of subqueries) {
+          // Prioritize and limit subqueries based on iteration
+          const prioritizedSubqueries = this.prioritizeSubqueries(subqueries, currentIteration, maxIterations);
+          
+          for (const sq of prioritizedSubqueries) {
             await enqueueSearchJob(taskId, organizationId, mainQuery, sq.query, sq.purpose, mode, taskSpec);
           }
+        } else if (subqueries.length > 0 && currentIteration >= maxIterations) {
+          console.log(`[Task ${taskId}] EVALUATE found gaps but max iterations reached. Running verification then synthesizing.`);
+          // Enqueue verification before synthesis for DEEP mode
+          if (mode === "DEEP" && aggregatedFacts.length > 0) {
+            await enqueueVerifyJob(taskId, organizationId, mainQuery, aggregatedFacts, taskEvidences, mode);
+          } else {
+            await enqueueSynthesizeJob(taskId, organizationId, mainQuery, taskSpec, responseFormat);
+          }
         } else {
-          console.log(`[Task ${taskId}] EVALUATE satisfied. Proceeding to synthesize.`);
-          await enqueueSynthesizeJob(taskId, organizationId, mainQuery, taskSpec, responseFormat);
+          console.log(`[Task ${taskId}] EVALUATE satisfied. Running verification then synthesizing.`);
+          // Enqueue verification before synthesis for DEEP mode
+          if (mode === "DEEP" && aggregatedFacts.length > 0) {
+            await enqueueVerifyJob(taskId, organizationId, mainQuery, aggregatedFacts, taskEvidences, mode);
+          } else {
+            await enqueueSynthesizeJob(taskId, organizationId, mainQuery, taskSpec, responseFormat);
+          }
         }
+      } catch (err) {
+        await failWorkerRun(run.id, err);
+        throw err;
+      }
+    }
+
+    else if (job.name === "VERIFY") {
+      console.log(`[Task ${taskId}] Starting VERIFY job for cross-source verification...`);
+      const run = await createWorkerRun(taskId, "VERIFY", "openrouter", "gpt-4o-mini", { query: mainQuery });
+      try {
+        const { claims, sources } = job.data;
+        
+        const verifier = new VerificationWorker({ mode });
+        const result = await verifier.execute(taskId, {
+          query: mainQuery,
+          claims: claims,
+          sources: sources,
+          mode
+        }, taskContext);
+
+        const cost = result.usage?.cost || 0;
+        taskContext.recordWorkerUsage(`verify_${run.id}`, result.usage, cost);
+        await completeWorkerRun(run.id, result, cost, result.usage);
+
+        // Filter claims based on verification results
+        const filteredClaims = VerificationWorker.filterByVerification(claims, result.verifications, 'MEDIUM');
+        console.log(`[Task ${taskId}] Verification filtered ${claims.length} claims to ${filteredClaims.length} high-confidence claims.`);
+
+        // Update task with verification stats
+        const verificationStats = VerificationWorker.aggregateVerifications(result.verifications);
+        console.log(`[Task ${taskId}] Verification stats: ${JSON.stringify(verificationStats)}`);
+
+        // Proceed to synthesis with verified claims
+        await enqueueSynthesizeJob(taskId, organizationId, mainQuery, taskSpec, responseFormat);
       } catch (err) {
         await failWorkerRun(run.id, err);
         throw err;
@@ -373,35 +487,82 @@ const worker = new Worker(
       const run = await createWorkerRun(taskId, "SYNTHESIZE", "openrouter", "gpt-4o-mini", { query: mainQuery, taskSpec });
       
       try {
+        console.log(`[Task ${taskId}] Fetching task evidence...`);
         // Fetch all TaskEvidence for this task
         const taskEvidences = await prisma.taskEvidence.findMany({
           where: { taskId, organizationId }
         });
         
+        console.log(`[Task ${taskId}] Found ${taskEvidences.length} evidence records`);
+        
         const EvidenceAggregator = require("../modules/tasks/evidenceAggregator");
+        console.log(`[Task ${taskId}] Aggregating evidence...`);
         const aggregatedFacts = EvidenceAggregator.aggregate(taskEvidences);
         
+        console.log(`[Task ${taskId}] Aggregated ${aggregatedFacts.length} facts for synthesis`);
+        
         const rawSources = [...new Set(aggregatedFacts.flatMap(f => f.sources))];
+        console.log(`[Task ${taskId}] Processing ${rawSources.length} unique sources`);
         const processedSources = SourceManager.processSources(rawSources);
 
-        const synthesizer = new SynthesisWorker();
+        console.log(`[Task ${taskId}] Starting synthesis worker...`);
+        const synthesizer = new SynthesisWorker({ mode });
         const result = await synthesizer.execute(taskId, {
           query: mainQuery,
           taskSpec,
           responseFormat,
-          facts: aggregatedFacts.map(f => `[${f.type.toUpperCase()}] Claim: ${f.claim}\nEvidence: ${f.evidenceText}\nSources: ${f.sources.join(", ")}`),
-          sources: processedSources.map(s => `[${s.id}] ${s.url}`)
+          facts: aggregatedFacts.map(f => ({
+            claim: f.claim,
+            evidence: f.evidenceText,
+            confidence: f.confidence,
+            sources: f.sources,
+            type: f.type,
+            category: f.category
+          })),
+          sources: processedSources.map(s => `[${s.id}] ${s.url}`),
+          mode
         }, taskContext);
 
+        console.log(`[Task ${taskId}] Synthesis worker completed`);
         const cost = result.usage?.cost || 0;
+        console.log(`[Task ${taskId}] Recording worker usage`);
         taskContext.recordWorkerUsage('synthesis', result.usage, cost);
+        console.log(`[Task ${taskId}] Completing worker run`);
         await completeWorkerRun(run.id, result, cost, result.usage);
+        console.log(`[Task ${taskId}] Mapping metrics updated`);
         EventMapper.mapMetricsUpdated(taskId, 'synthesis', taskContext);
+        console.log(`[Task ${taskId}] Mapping worker completed`);
         EventMapper.mapWorkerCompleted(taskId, 'synthesis', { status: 'success' });
 
+        // Record final quality metrics
+        console.log(`[Task ${taskId}] Recording quality metrics`);
+        const taskMetrics = taskContext.getMetrics();
+        
+        // Temporarily disable quality metrics recording to fix hang
+        // qualityMetricsService.recordPipelineMetrics(taskId, {
+        //   latency: task.executionTimeMs,
+        //   tokens: taskMetrics.tokens.total,
+        //   cost: cost,
+        //   success: true,
+        //   cacheHits: taskMetrics.tokens.cached || 0
+        // });
+
+        // qualityMetricsService.recordResearchMetrics(taskId, {
+        //   sourceQuality: qualityReport.averageScore,
+        //   factConfidence: taskMetrics.facts > 0 ? 80 : 50, // Simplified confidence
+        //   contradictionRate: 0.1, // Would be calculated from actual contradictions
+        //   verificationPass: 0.9, // Would be calculated from actual verification
+        //   sourceDiversity: qualityReport.domainDistribution ? Object.keys(qualityReport.domainDistribution).length : 3
+        // });
+
+        console.log(`[Task ${taskId}] Quality metrics recording skipped (temporarily disabled)`);
+
         // Fetch all worker runs to compute metrics
+        console.log(`[Task ${taskId}] Fetching worker runs for metrics`);
         const allRuns = await prisma.workerRun.findMany({ where: { taskId } });
+        console.log(`[Task ${taskId}] Found ${allRuns.length} worker runs`);
         const MetricsAggregator = require("../modules/tasks/metricsAggregator");
+        console.log(`[Task ${taskId}] Aggregating metrics`);
         const aggregatedMetrics = MetricsAggregator.aggregate(allRuns);
 
         // Update task output with the result

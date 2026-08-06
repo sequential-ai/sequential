@@ -1,22 +1,24 @@
 const path = require("node:path");
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
+require("dotenv").config({ path: path.join(__dirname, "../../../.env") });
 
-const { SearchWorker } = require("./index");
-const query = process.argv.slice(2).join(" ").trim();
+const { ScraperWorker } = require("../index");
+const url = process.argv[2];
 
-if (!query) {
-  console.error('Usage: pnpm run check:search -- "your search query"');
+if (!url) {
+  console.error('Usage: pnpm run check:scrape -- "https://example.com"');
   process.exitCode = 1;
 } else {
-  new SearchWorker()
-    .run({ query, num: 10 })
+  new ScraperWorker()
+    .run(url)
     .then((result) => {
       console.log(
         JSON.stringify(
           {
-            query: result.query,
-            resultCount: result.organic.length,
-            results: result.organic,
+            url: result.url,
+            title: result.title,
+            description: result.description,
+            content: result.content,
+            contentLength: result.content.length,
           },
           null,
           2,

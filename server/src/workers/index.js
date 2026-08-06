@@ -6,6 +6,7 @@ const { SubQueryWorker } = require("./subquery.worker");
 const { FactExtractorWorker } = require("./fact-extractor.worker");
 const { EvaluateWorker } = require("./evaluate.worker");
 const { SynthesisWorker } = require("./synthesis.worker");
+const { VerificationWorker } = require("./verification.worker");
 
 module.exports = {
   SearchWorker,
@@ -15,5 +16,6 @@ module.exports = {
   FactExtractorWorker,
   EvaluateWorker,
   SynthesisWorker,
+  VerificationWorker,
   WorkerError,
 };

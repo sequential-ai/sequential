@@ -82,6 +82,18 @@ async function enqueueSynthesizeJob(taskId, organizationId, query, taskSpec = nu
   );
 }
 
+/**
+ * Enqueues a VERIFY job for cross-source verification.
+ */
+async function enqueueVerifyJob(taskId, organizationId, query, claims, sources, mode = "STANDARD") {
+  const hash = crypto.createHash("md5").update(`verify-${taskId}`).digest("hex");
+  await researchQueue.add(
+    "VERIFY",
+    { taskId, organizationId, query, claims, sources, mode },
+    { jobId: `verify-${taskId}-${hash}` }
+  );
+}
+
 module.exports = {
   connection,
   researchQueue,
@@ -91,4 +103,5 @@ module.exports = {
   enqueueExtractJob,
   enqueueEvaluateJob,
   enqueueSynthesizeJob,
+  enqueueVerifyJob,
 };

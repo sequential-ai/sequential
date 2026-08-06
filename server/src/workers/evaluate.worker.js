@@ -3,12 +3,14 @@ const BaseWorker = require("./base.worker");
 const { OpenRouterWorker, parseJsonContent } = require("./openrouter.worker");
 const { EVALUATE_SYSTEM_PROMPT } = require("./prompts");
 const EventMapper = require("../sse/EventMapper");
+const modelSelectionService = require("../services/model-selection.service");
 
 class EvaluateWorker extends BaseWorker {
   constructor(options = {}) {
     super("evaluate");
     this.llm = options.llm || new OpenRouterWorker(options);
     this.model = options.model;
+    this.mode = options.mode || 'STANDARD';
   }
 
   getEventPrefix() {
@@ -23,8 +25,14 @@ class EvaluateWorker extends BaseWorker {
       });
     }
 
+    // Use model selection service for cost-effective model choice
+    const selectedModel = input.model || this.model || 
+      modelSelectionService.getWorkerModel('evaluate', this.mode);
+
+    console.log(`[EvaluateWorker] Using model: ${selectedModel} for evaluation`);
+
     const result = await this.llm.run({
-      model: input.model || this.model,
+      model: selectedModel,
       temperature: input.temperature ?? 0.1,
       maxTokens: input.maxTokens,
       responseFormat: { type: "json_object" },
