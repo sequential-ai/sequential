@@ -24,6 +24,10 @@ const streamTaskEvents = async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
+    // Event filtering support
+    const eventTypes = (req.query.types || "").split(",").filter(t => t.trim());
+    const shouldFilter = eventTypes.length > 0;
+
     // Send an initial connected ping or first heartbeat immediately
     res.write(`:\n\n`);
 
@@ -44,6 +48,11 @@ const streamTaskEvents = async (req, res) => {
     });
 
     for (const ev of missedEvents) {
+      // Skip if event type filtering is enabled and this type is not requested
+      if (shouldFilter && !eventTypes.includes(ev.type)) {
+        continue;
+      }
+
       // Reconstruct the exact v2 Public Event structure
       // (ExecutionTimeline merges correlationId and schemaVersion into the DB payload for storage)
       const { schemaVersion, correlationId, parentEventId, ...actualPayload } = ev.payload || {};
@@ -78,6 +87,11 @@ const streamTaskEvents = async (req, res) => {
 
     // Subscribe to real-time events via Event Bus
     const unsubscribe = await eventBus.subscribe(taskId, (eventData) => {
+      // Skip if event type filtering is enabled and this type is not requested
+      if (shouldFilter && !eventTypes.includes(eventData.type)) {
+        return;
+      }
+
       currentSequence = eventData.sequence;
       res.write(`id: ${eventData.sequence}\n`);
       res.write(`event: ${eventData.type}\n`);

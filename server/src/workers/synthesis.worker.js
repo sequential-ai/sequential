@@ -26,8 +26,9 @@ class SynthesisWorker extends BaseWorker {
       });
     }
 
-    let systemPrompt = SYNTHESIS_SYSTEM_PROMPT;
+     systemPrompt = SYNTHESIS_SYSTEM_PROMPT;
     let llmResponseFormat = { type: "json_object" };
+    let systemPrompt = SYNTHESIS_SYSTEM_PROMPT;
     
     if (input.responseFormat === "markdown") {
       systemPrompt = `You are the final synthesis worker for Sequential AI.\n\nYour responsibility is to produce the final research result as a highly presentable, pure MARKDOWN string.\n\nIMPORTANT INSTRUCTIONS:\n1. Always start your response with a large level-1 heading (# Title) that perfectly summarizes the research topic.\n2. Do NOT generate JSON. Do NOT wrap your answer in a JSON object (e.g. no "summary" or "data" fields).\n3. Use Markdown tables if the answer requires tabular data.\n4. Keep the presentation simple, clean, and professional, similar to a README.md file.\n5. Use proper heading hierarchy (##, ###), lists, and bold text as appropriate.\n6. Ensure you cite your sources properly in the text.`;
@@ -46,18 +47,91 @@ class SynthesisWorker extends BaseWorker {
     console.log(`[SynthesisWorker] Using model: ${selectedModel} for synthesis`);
     console.log(`[SynthesisWorker] Processing ${input.facts?.length || 0} facts`);
 
-    // Temporarily disable progressive refinement to isolate the issue
-    // const refinedFacts = this.refineFacts(input.facts || [], input.sources || []);
-    const refinedFacts = input.facts || [];
-    console.log(`[SynthesisWorker] Using ${refinedFacts.length} facts (progressive refinement disabled)`);
+    // Apply evidence selection with error handling
+    let selectedFacts = input.facts || [];
+    try {
+      const evidenceSelectionService = require('../services/evidence-selection.service');
+      selectedFacts = await evidenceSelectionService.selectEvidence(
+        input.facts || [], 
+        input.query, 
+        this.mode
+      );
+      console.log(`[SynthesisWorker] Selected ${selectedFacts.length} facts from ${input.facts?.length || 0} total`);
+    } catch (error) {
+      console.warn('[SynthesisWorker] Evidence selection failed, using all facts:', error.message);
+      selectedFacts = input.facts || [];
+    }
 
-    // Convert fact objects to strings for LLM consumption
+    // Apply progressive refinement for ranking
+    const refinedFacts = this.refineFacts(selectedFacts, input.sources || []);
+    console.log(`[SynthesisWorker] Refined to ${refinedFacts.length} facts with enhanced scoring`);
+
+    // Convert fact objects to strings for LLM consumption with enhanced metadata
     const factStrings = refinedFacts.map(f => {
       if (typeof f === 'string') return f;
-      return `[${f.type?.toUpperCase() || 'FACT'}] Claim: ${f.claim}\nEvidence: ${f.evidence || f.evidenceText}\nSources: ${Array.isArray(f.sources) ? f.sources.join(", ") : f.sources}`;
+      
+      let factStr = `[${f.type?.toUpperCase() || 'FACT'}] Claim: ${f.claim}\nEvidence: ${f.evidence || f.evidenceText}`;
+      
+      // Add source information
+      const sources = f.sourceUrls || f.sources;
+      if (Array.isArray(sources)) {
+        factStr += `\nSources: ${sources.join(", ")}`;
+      } else if (sources) {
+        factStr += `\nSource: ${sources}`;
+      }
+
+      // Add confidence information
+      if (f.enhancedConfidence) {
+        factStr += `\nConfidence: ${(f.enhancedConfidence * 100).toFixed(0)}%`;
+      } else if (f.confidence) {
+        factStr += `\nConfidence: ${f.confidence}`;
+      }
+
+      // Add original source information if available
+      if (f.originalSource) {
+        factStr += `\nOriginal Source: ${f.originalSource}`;
+        if (f.originalSourceVerified) {
+          factStr += ' (Verified)';
+        }
+      }
+
+      // Add contradiction warning if present
+      if (f.contradictions && f.contradictions.length > 0) {
+        factStr += `\nNote: This claim has ${f.contradictions.length} conflicting source(s)`;
+      }
+
+      // Add independent source count if available
+      if (f.independentSourceCount && f.independentSourceCount > 1) {
+        factStr += `\nCorroborated by ${f.independentSourceCount} independent sources`;
+      }
+
+      return factStr;
     });
 
     console.log(`[SynthesisWorker] Calling LLM with ${factStrings.length} fact strings`);
+
+    // Prepare user content
+    let userContent = {
+      query: input.query.trim(),
+      facts: factStrings,
+      sources: input.sources || [],
+      previousValidationErrors: input.validationErrors || undefined
+    };
+
+    // If answer plan is provided with pre-validated candidates, enforce them
+    if (input.answerPlan && input.answerPlan.candidates.length > 0) {
+      console.log(`[SynthesisWorker] Enforcing ${input.answerPlan.candidates.length} pre-validated candidates`);
+      
+      // Add candidate constraint to system prompt
+      systemPrompt += `\n\n## Candidate Constraints\nFor this ranking query, you MUST use the following pre-validated candidates in your answer:\n`;
+      input.answerPlan.candidates.forEach((c, i) => {
+        systemPrompt += `${i + 1}. ${c.name} (confidence: ${(c.queryRelevance * 100).toFixed(0)}%)\n`;
+      });
+      systemPrompt += `\nDo NOT replace these candidates with other entities. Your role is to explain and rank these specific candidates.\n`;
+      
+      // Add candidates to user content
+      userContent.preValidatedCandidates = input.answerPlan.candidates;
+    }
 
     const result = await this.llm.run({
       model: selectedModel,
@@ -71,12 +145,7 @@ class SynthesisWorker extends BaseWorker {
         },
         {
           role: "user",
-          content: JSON.stringify({
-            query: input.query.trim(),
-            facts: factStrings,
-            sources: input.sources || [],
-            previousValidationErrors: input.validationErrors || undefined
-          }),
+          content: JSON.stringify(userContent),
         },
       ],
       stream: true,
@@ -197,28 +266,45 @@ class SynthesisWorker extends BaseWorker {
     const scoredFacts = facts.map(fact => {
       let score = 0;
 
-      // Confidence scoring
-      const confWeight = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-      const factConf = typeof fact === 'string' ? 'MEDIUM' : (fact.confidence || 'MEDIUM');
-      score += confWeight[factConf] || 2;
+      // Enhanced confidence scoring (use enhancedConfidence if available)
+      let confScore = 0.6; // Default MEDIUM
+      if (fact.enhancedConfidence) {
+        confScore = fact.enhancedConfidence;
+      } else if (fact.confidence) {
+        const confWeight = { HIGH: 0.85, MEDIUM: 0.60, LOW: 0.35 };
+        confScore = confWeight[fact.confidence] || 0.60;
+      }
+      score += confScore * 3;
 
       // Length scoring (longer facts often more detailed)
-      const factText = typeof fact === 'string' ? fact : (fact.claim || fact.evidence || '');
+      const factText = fact.claim || fact.evidence || fact.evidenceText || '';
       if (factText.length > 100) score += 2;
       else if (factText.length > 50) score += 1;
 
-      // Source diversity scoring
-      const factSources = typeof fact === 'string' ? [] : (fact.sources || []);
-      if (factSources.length > 1) score += 2;
-      else if (factSources.length === 1) score += 1;
+      // Source diversity scoring (use independentSourceCount if available)
+      const sourceCount = fact.independentSourceCount || fact.sourceCount || (fact.sources ? fact.sources.length : 0);
+      if (sourceCount > 1) score += Math.min(3, sourceCount * 1.5);
+      else if (sourceCount === 1) score += 1;
 
       // Numerical data scoring
       if (/\d+/.test(factText)) score += 1;
 
-      // Resolution status (if contradictions were resolved)
-      if (typeof fact === 'object' && fact.resolution && fact.resolution !== 'mark_uncertain') {
-        score += 2;
+      // Original source verification bonus
+      if (fact.originalSourceVerified) score += 2;
+
+      // Cluster bonus (if this is the best evidence in a cluster)
+      if (fact.clusterId && fact.totalScore && fact.totalScore > 0.7) {
+        score += 1.5;
       }
+
+      // Contradiction penalty
+      if (fact.contradictions && fact.contradictions.length > 0) {
+        score -= fact.contradictions.length * 0.5;
+      }
+
+      // Specificity bonus (proper nouns, technical terms)
+      const properNouns = factText.match(/\b[A-Z][a-z]+\b/g);
+      if (properNouns && properNouns.length > 2) score += 1;
 
       return {
         fact,
@@ -229,8 +315,8 @@ class SynthesisWorker extends BaseWorker {
     // Sort by score (highest first)
     scoredFacts.sort((a, b) => b.score - a.score);
 
-    // Return top 80% of facts, ensuring minimum of 10
-    const topCount = Math.max(10, Math.floor(scoredFacts.length * 0.8));
+    // Return top 90% of facts, ensuring minimum of 5
+    const topCount = Math.max(5, Math.floor(scoredFacts.length * 0.9));
     return scoredFacts.slice(0, topCount).map(item => item.fact);
   }
 }

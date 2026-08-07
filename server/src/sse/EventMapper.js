@@ -83,6 +83,83 @@ class EventMapper {
     }
   }
 
+  // --- Domain: Evidence Clustering ---
+
+  static mapEvidenceClustered(taskId, workerId, cluster, correlationId) {
+    const event = this._buildBaseEvent(taskId, workerId, 'evidence.clustered', {
+      clusterId: cluster.id,
+      canonicalClaim: cluster.canonicalClaim,
+      claimCount: cluster.supportingEvidence.length,
+      independentSourceCount: cluster.independentSourceCount,
+      confidence: cluster.confidence
+    }, correlationId);
+    eventPipeline.push(event);
+  }
+
+  // --- Domain: Original Source Resolution ---
+
+  static mapOriginalSourceResolved(taskId, workerId, resolution, correlationId) {
+    const event = this._buildBaseEvent(taskId, workerId, 'original.source.resolved', {
+      claimId: resolution.claimId,
+      originalSource: resolution.originalSource,
+      originalUrl: resolution.originalUrl,
+      verified: resolution.verified,
+      confidenceDelta: resolution.confidenceDelta
+    }, correlationId);
+    eventPipeline.push(event);
+  }
+
+  // --- Domain: Contradiction Detection ---
+
+  static mapContradictionDetected(taskId, workerId, contradiction, correlationId) {
+    const event = this._buildBaseEvent(taskId, workerId, 'contradiction.detected', {
+      claimA: contradiction.claimA,
+      claimB: contradiction.claimB,
+      sourceA: contradiction.sourceA,
+      sourceB: contradiction.sourceB,
+      severity: contradiction.severity,
+      type: contradiction.type
+    }, correlationId);
+    eventPipeline.push(event);
+  }
+
+  // --- Domain: Evidence Selection ---
+
+  static mapEvidenceSelected(taskId, workerId, selectionStats, correlationId) {
+    const event = this._buildBaseEvent(taskId, workerId, 'evidence.selected', {
+      totalEvidence: selectionStats.totalEvidence,
+      selectedEvidence: selectionStats.selectedEvidence,
+      budgetUsed: selectionStats.budgetUsed,
+      averageQuality: selectionStats.averageQuality,
+      dimensionsCovered: selectionStats.dimensionsCovered || []
+    }, correlationId);
+    eventPipeline.push(event);
+  }
+
+  // --- Domain: Research Dimensions ---
+
+  static mapResearchDimensionCovered(taskId, workerId, dimensionStats, correlationId) {
+    const event = this._buildBaseEvent(taskId, workerId, 'research.dimension.covered', {
+      dimension: dimensionStats.dimension,
+      evidenceCount: dimensionStats.evidenceCount,
+      confidence: dimensionStats.confidence,
+      completeness: dimensionStats.completeness
+    }, correlationId);
+    eventPipeline.push(event);
+  }
+
+  // --- Domain: Quality Guardrails ---
+
+  static mapQualityGuardrailCheck(taskId, workerId, guardrailResult, correlationId) {
+    const event = this._buildBaseEvent(taskId, workerId, 'quality.guardrail.check', {
+      checkType: guardrailResult.type,
+      passed: guardrailResult.passed,
+      details: guardrailResult.message,
+      severity: guardrailResult.severity
+    }, correlationId);
+    eventPipeline.push(event);
+  }
+
   // --- Domain: Source ---
 
   static mapSourceLifecycle(taskId, workerId, sourceUrl, status, correlationId) {

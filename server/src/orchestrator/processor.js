@@ -13,6 +13,8 @@ const sourceQualityService = require("../services/source-quality.service");
 const qualityMetricsService = require("../services/quality-metrics.service");
 const SourceManager = require("../modules/tasks/sourceManager");
 const EvidenceBuilder = require("../modules/tasks/evidenceBuilder");
+const evidenceSelectionService = require("../services/evidence-selection.service");
+const qualityGuardrailsService = require("../services/quality-guardrails.service");
 
 const activeContexts = new Map();
 
@@ -396,12 +398,12 @@ const worker = new Worker(
       try {
         const taskEvidences = await prisma.taskEvidence.findMany({ where: { taskId, organizationId } });
         const EvidenceAggregator = require("../modules/tasks/evidenceAggregator");
-        const aggregatedFacts = EvidenceAggregator.aggregate(taskEvidences);
+        const aggregatedFacts = await EvidenceAggregator.aggregate(taskEvidences);
 
         const evaluator = new EvaluateWorker({ mode });
         const result = await evaluator.execute(taskId, {
           query: mainQuery,
-          facts: aggregatedFacts.map(f => `Claim: ${f.claim}\nEvidence: ${f.evidenceText}`),
+          facts: aggregatedFacts.map(f => `Claim: ${f.claim}\nEvidence: ${f.evidence || f.evidenceText}`),
           mode,
           iteration: currentIteration,
           maxIterations
@@ -497,13 +499,26 @@ const worker = new Worker(
         
         const EvidenceAggregator = require("../modules/tasks/evidenceAggregator");
         console.log(`[Task ${taskId}] Aggregating evidence...`);
-        const aggregatedFacts = EvidenceAggregator.aggregate(taskEvidences);
+        const aggregatedFacts = await EvidenceAggregator.aggregate(taskEvidences);
         
         console.log(`[Task ${taskId}] Aggregated ${aggregatedFacts.length} facts for synthesis`);
         
-        const rawSources = [...new Set(aggregatedFacts.flatMap(f => f.sources))];
+        const rawSources = [...new Set(aggregatedFacts.flatMap(f => f.sourceUrls || f.sources))];
         console.log(`[Task ${taskId}] Processing ${rawSources.length} unique sources`);
         const processedSources = SourceManager.processSources(rawSources);
+
+        // Create answer plan before synthesis (for ranking queries)
+        let answerPlan = null;
+        try {
+          const answerPlanningService = require('../services/answer-planning.service');
+          answerPlan = await answerPlanningService.createAnswerPlan(mainQuery, aggregatedFacts, mode);
+          console.log(`[Task ${taskId}] Answer plan created: ${answerPlan.strategy} strategy`);
+          if (answerPlan.candidates.length > 0) {
+            console.log(`[Task ${taskId}] Pre-validated ${answerPlan.candidates.length} candidates`);
+          }
+        } catch (error) {
+          console.warn('[Task ${taskId}] Answer planning failed, proceeding without plan:', error.message);
+        }
 
         console.log(`[Task ${taskId}] Starting synthesis worker...`);
         const synthesizer = new SynthesisWorker({ mode });
@@ -513,14 +528,18 @@ const worker = new Worker(
           responseFormat,
           facts: aggregatedFacts.map(f => ({
             claim: f.claim,
-            evidence: f.evidenceText,
+            evidence: f.evidence || f.evidenceText,
             confidence: f.confidence,
-            sources: f.sources,
+            sources: f.sourceUrls || f.sources,
             type: f.type,
-            category: f.category
+            category: f.category,
+            clusterId: f.clusterId,
+            independentSourceCount: f.independentSourceCount,
+            contradictions: f.contradictions
           })),
           sources: processedSources.map(s => `[${s.id}] ${s.url}`),
-          mode
+          mode,
+          answerPlan // Pass answer plan to synthesis
         }, taskContext);
 
         console.log(`[Task ${taskId}] Synthesis worker completed`);
@@ -533,6 +552,52 @@ const worker = new Worker(
         EventMapper.mapMetricsUpdated(taskId, 'synthesis', taskContext);
         console.log(`[Task ${taskId}] Mapping worker completed`);
         EventMapper.mapWorkerCompleted(taskId, 'synthesis', { status: 'success' });
+
+        // Run quality guardrails with error handling
+        try {
+          console.log(`[Task ${taskId}] Running quality guardrails`);
+          const qualityGuardrailsService = require('../services/quality-guardrails.service');
+          const validationResult = await qualityGuardrailsService.validateSynthesis(
+            result, 
+            aggregatedFacts, 
+            processedSources, 
+            mainQuery
+          );
+          
+          console.log(`[Task ${taskId}] Quality guardrails result:`, validationResult.summary);
+          
+          // Emit quality guardrail events
+          for (const warning of validationResult.warnings) {
+            EventMapper.mapQualityGuardrailCheck(taskId, 'synthesis', {
+              type: warning.type,
+              passed: true,
+              message: warning.message,
+              severity: warning.severity
+            });
+          }
+          
+          for (const issue of validationResult.issues) {
+            EventMapper.mapQualityGuardrailCheck(taskId, 'synthesis', {
+              type: issue.type,
+              passed: false,
+              message: issue.message,
+              severity: issue.severity
+            });
+          }
+          
+          if (!validationResult.canProceed) {
+            console.error(`[Task ${taskId}] Critical quality issues detected:`, validationResult.issues);
+            // Don't fail the task, but log the issues for now
+            // In production, you might want to implement retry logic or manual review
+          }
+          
+          if (validationResult.warnings.length > 0) {
+            console.warn(`[Task ${taskId}] Quality warnings:`, validationResult.warnings);
+          }
+        } catch (error) {
+          console.error('[Task ${taskId}] Quality guardrails failed, proceeding without validation:', error);
+          // Continue without quality guardrails if they fail
+        }
 
         // Record final quality metrics
         console.log(`[Task ${taskId}] Recording quality metrics`);

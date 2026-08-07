@@ -1,6 +1,7 @@
 /**
  * Source quality scoring and ranking service
  * Improves research quality by prioritizing authoritative and diverse sources
+ * Enhanced with content-aware classification for primary vs secondary sources
  */
 
 // Domain lists for authority tiers (must be defined before class)
@@ -51,6 +52,49 @@ class SourceQualityService {
       /-blog\.spot\.com/, /wordpress\.com/, /medium\.com\/@/,
       /\.info$/, /\.xyz$/, /\.top$/, /\.tk$/
     ];
+
+    // Content patterns for primary source detection
+    this.primarySourcePatterns = [
+      // Official documentation patterns
+      /official\s+(documentation|docs|guide|reference|spec|specification)/i,
+      /api\s+reference/i,
+      /technical\s+specification/i,
+      /white\s+paper/i,
+      /research\s+paper/i,
+      
+      // Government/regulatory patterns
+      /sec\s+(filing|report)/i,
+      /10-\s*k/i,
+      /form\s+\d+/i,
+      /regulation|regulatory/i,
+      /federal\s+register/i,
+      
+      // Academic patterns
+      /abstract/i,
+      /methodology/i,
+      /results|findings/i,
+      /doi:/i,
+      /bibliography|references/i,
+      /peer-reviewed/i,
+      
+      // Company official patterns
+      /press\s+release/i,
+      /official\s+(announcement|statement|blog)/i,
+      /quarterly\s+earnings/i,
+      /annual\s+report/i
+    ];
+
+    // Secondary source patterns
+    this.secondarySourcePatterns = [
+      /according\s+to/i,
+      /reports?\s+that/i,
+      /sources?\s+say/i,
+      /announced\s+by/i,
+      /stated\s+that/i,
+      /mentioned\s+in/i,
+      /citing\s+/i,
+      /based\s+on\s+report/i
+    ];
   }
 
   /**
@@ -66,12 +110,12 @@ class SourceQualityService {
     // Authority tier scoring
     const authorityScore = this.getAuthorityScore(domain);
     factors.authority = authorityScore;
-    score += authorityScore * 30; // 30% weight
+    score += authorityScore * 25; // 25% weight
 
     // Trust category scoring
     const trustScore = this.getTrustScore(domain);
     factors.trust = trustScore;
-    score += trustScore * 25; // 25% weight
+    score += trustScore * 20; // 20% weight
 
     // Freshness scoring
     const freshnessScore = this.getFreshnessScore(source);
@@ -81,7 +125,12 @@ class SourceQualityService {
     // Content quality scoring
     const contentScore = this.getContentScore(source);
     factors.content = contentScore;
-    score += contentScore * 20; // 20% weight
+    score += contentScore * 15; // 15% weight
+
+    // Primary source bonus
+    const primarySourceBonus = this.getPrimarySourceBonus(source);
+    factors.primarySource = primarySourceBonus;
+    score += primarySourceBonus * 15; // 15% weight
 
     // Diversity penalty (avoid too many sources from same domain)
     // This would be applied during ranking, not individual scoring
@@ -95,8 +144,179 @@ class SourceQualityService {
       score: Math.max(0, Math.min(100, score)),
       factors,
       domain,
-      url
+      url,
+      sourceType: this.classifySourceType(source, domain)
     };
+  }
+
+  /**
+   * Classify source type (PRIMARY, HIGH_AUTHORITY_SECONDARY, etc.)
+   */
+  classifySourceType(source, domain) {
+    const domainLower = (domain || '').toLowerCase();
+    const content = (source.content || source.snippet || source.title || '').toLowerCase();
+    const url = (source.url || '').toLowerCase();
+
+    // Check for primary source indicators
+    const isPrimary = this.isPrimarySource(content, url, domainLower);
+    
+    if (isPrimary) {
+      return 'PRIMARY';
+    }
+
+    // Check for high authority secondary
+    if (this.isHighAuthoritySecondary(domainLower, content)) {
+      return 'HIGH_AUTHORITY_SECONDARY';
+    }
+
+    // Check for reputable secondary
+    if (this.isReputableSecondary(domainLower, content)) {
+      return 'REPUTABLE_SECONDARY';
+    }
+
+    // Check for general secondary
+    if (this.isGeneralSecondary(domainLower, content)) {
+      return 'GENERAL_SECONDARY';
+    }
+
+    // Default to low authority
+    return 'LOW_AUTHORITY';
+  }
+
+  /**
+   * Determine if source is primary (original/official)
+   */
+  isPrimarySource(content, url, domain) {
+    // Check domain patterns
+    if (domain.endsWith('.gov') || domain.endsWith('.edu') || domain.endsWith('.mil')) {
+      return true;
+    }
+
+    // Check URL patterns
+    if (url.includes('docs.') || url.includes('developer.') || url.includes('official')) {
+      return true;
+    }
+
+    // Check content patterns
+    for (const pattern of this.primarySourcePatterns) {
+      if (pattern.test(content)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Determine if source is high authority secondary
+   */
+  isHighAuthoritySecondary(domain, content) {
+    // Check against trusted news domains
+    const trustedNews = this.trustedDomains.news || [];
+    for (const newsDomain of trustedNews) {
+      if (domain.includes(newsDomain)) {
+        return true;
+      }
+    }
+
+    // Check for major research organizations
+    if (domain.includes('mckinsey') || domain.includes('deloitte') || 
+        domain.includes('pwc') || domain.includes('ey.com') ||
+        domain.includes('gartner') || domain.includes('forrester')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Determine if source is reputable secondary
+   */
+  isReputableSecondary(domain, content) {
+    // Check against tech domains
+    const techDomains = this.trustedDomains.tech || [];
+    for (const techDomain of techDomains) {
+      if (domain.includes(techDomain)) {
+        return true;
+      }
+    }
+
+    // Check for established publications
+    if (domain.includes('.com') && !this.isLowAuthority(domain)) {
+      // Has secondary attribution patterns
+      for (const pattern of this.secondarySourcePatterns) {
+        if (pattern.test(content)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Determine if source is general secondary
+   */
+  isGeneralSecondary(domain, content) {
+    // Industry blogs, vendor blogs, personal expert blogs
+    if (domain.includes('blog') || domain.includes('medium.com') || 
+        domain.includes('substack.com')) {
+      return true;
+    }
+
+    // Has secondary attribution but not clearly reputable
+    for (const pattern of this.secondarySourcePatterns) {
+      if (pattern.test(content)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Determine if source is low authority
+   */
+  isLowAuthority(domain) {
+    for (const pattern of this.suspiciousPatterns) {
+      if (pattern.test(domain)) {
+        return true;
+      }
+    }
+
+    if (domain.endsWith('.info') || domain.endsWith('.biz') || 
+        domain.endsWith('.xyz') || domain.endsWith('.top')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get primary source bonus score
+   */
+  getPrimarySourceBonus(source) {
+    const domain = this.extractDomain(source.url || source);
+    const content = (source.content || source.snippet || '').toLowerCase();
+    const url = (source.url || '').toLowerCase();
+
+    if (this.isPrimarySource(content, url, domain)) {
+      return 90; // High bonus for primary sources
+    }
+
+    if (this.isHighAuthoritySecondary(domain, content)) {
+      return 70; // Good bonus for high authority secondary
+    }
+
+    if (this.isReputableSecondary(domain, content)) {
+      return 50; // Moderate bonus for reputable secondary
+    }
+
+    if (this.isGeneralSecondary(domain, content)) {
+      return 30; // Low bonus for general secondary
+    }
+
+    return 10; // Minimal bonus for low authority
   }
 
   /**
